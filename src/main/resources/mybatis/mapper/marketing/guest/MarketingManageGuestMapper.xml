@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.marketing.guest.MarketingManageGuestMapper">
+
+    <select id="getList" resultType="yezak.api.api.marketing.guest.dto.MarketingManageGuestListResponse">
+        SELECT
+            a.id AS id
+            ,a.title AS title
+            ,a.user_id AS userId
+            ,a.access_root_id AS accessRootId
+            ,a.hospital_id AS hospitalId
+            ,a.amount AS amount
+            ,a.execution_date AS executionDate
+            ,a.created_at AS createdAt
+            ,a.updated_at AS updatedAt
+            ,b.name AS name
+        FROM patient_imports a, access_roots b
+        WHERE 1=1
+        AND a.access_root_id = b.id
+        AND a.hospital_id = #{hospitalId}
+          and b.use_yn = 1
+          and b.deleted_at is null
+        ORDER BY a.id DESC
+    </select>
+
+    <insert id="registDb" parameterType="yezak.api.api.marketing.guest.dto.MarketingManageGuestRegistRequest" useGeneratedKeys="true" keyProperty="id">
+<!--        <selectKey resultType="Long" keyProperty="id" order="AFTER">-->
+<!--            SELECT LAST_INSERT_ID()-->
+<!--        </selectKey>-->
+
+        INSERT INTO patient_imports
+            (title, user_id, access_root_id, hospital_id, amount, execution_date)
+        VALUES
+            (#{title}, #{userId}, #{accessRootId}, #{hospitalId}, #{amount}, #{executionDate})
+    </insert>
+
+    <insert id="registFile" parameterType="yezak.api.api.marketing.guest.dto.MarketingManageGuestFileRequest">
+        INSERT INTO patient_import_attachments
+        (patient_import_id, file_name, file_path, file_extension, file_size)
+        VALUES
+        (#{patientImportId}, #{fileName}, #{filePath}, #{fileExtention}, #{fileSize})
+    </insert>
+
+    <insert id="registPatiantsData" parameterType="java.util.HashMap">
+        INSERT INTO patients
+        (name, phone_number, hospital_id, access_root_id)
+        VALUES
+        (#{name}, #{phoneNumber}, #{hospitalId}, #{accessRootId})
+    </insert>
+
+    <select id="checkPatientCounselingInfo" resultType="java.lang.Integer">
+        select
+            count(*)
+        from patient_counseling_infos
+        where patient_id = (
+                select
+                    id
+                from patients
+                where name = #{name}
+                and phone_number = #{phoneNumber}
+                and hospital_id = #{hospitalId}
+                order by id desc
+                limit 1
+            )
+    </select>
+
+</mapper>

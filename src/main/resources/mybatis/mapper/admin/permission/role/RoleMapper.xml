@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.admin.permission.role.RoleMapper">
+
+    <select id="getRoleCategories" parameterType="Long" resultType="yezak.api.api.admin.permission.role.dto.RoleCategoryRes">
+        <!-- 직군 카테고리 조회 -->
+        select rc.id
+             , rc.ko_name
+             , count(u.id) as count
+          from role_categories as rc
+     left join roles as r
+            on r.role_category_id = rc.id
+     left join users as u
+            on u.role_id = r.id
+           and u.hospital_id = #{hospitalId}
+           and u.is_deleted = 0
+         where rc.id &lt;&gt; 12
+           and rc.id &lt;&gt; 10
+      group by rc.id
+    </select>
+
+    <select id="getRoles" parameterType="java.lang.Long" resultType="yezak.api.api.admin.permission.role.dto.GetRolesRes">
+        <!-- 상세 직군 조회 -->
+        select r.ko_name
+             , g.name
+             , r.id as roleId
+             , g.id as gradeId
+             , (select count(id) from users where role_id = r.id and is_deleted = 0 and hospital_id = #{hospitalId}) as count
+          from roles as r
+     left join grades as g
+            on r.grade_id = g.id
+         where r.role_category_id = #{id}
+           and r.hospital_id = #{hospitalId}
+    </select>
+
+    <insert id="insertRole" parameterType="yezak.api.api.admin.permission.role.dto.InsertRoleReq" useGeneratedKeys="true" keyProperty="id">
+        <!-- 상세 직군 추가 -->
+        insert into roles
+        (
+            ko_name
+          , grade_id
+          , role_category_id
+          , hospital_id
+        )
+        values
+        (
+            #{koName}
+          , #{gradeId}
+          , #{roleCategoryId}
+          , #{hospitalId}
+        )
+    </insert>
+    <select id="findRoleCategoryId" parameterType="Long" resultType="Long">
+        select role_category_id
+          from roles
+         where id = #{id}
+    </select>
+
+    <select id="getKoName" parameterType="java.lang.String" resultType="String">
+        <!-- 상세 직군 insert시 중복 방지를 위한 roles 테이블 조회 -->
+        select ko_name
+          from roles
+         where ko_name = #{koName}
+    </select>
+
+<!--    <select id="toDelete" parameterType="" resultType="int">-->
+<!--        select (select count(id) from users where role_id = r.id) as count-->
+<!--          from roles-->
+<!--         where-->
+<!--    </select>-->
+    <select id="countUser" parameterType="Long" resultType="int">
+        select count(id) as count
+          from users
+         where role_id = #{roleId}
+           and is_deleted = 0
+    </select>
+    <delete id="deleteRole" parameterType="Long">
+        <!-- 상세직군 삭제 -->
+        delete from roles
+         where id = #{id}
+    </delete>
+
+    <update id="updateRole" parameterType="yezak.api.api.admin.permission.role.dto.UpdateRoleReq">
+        <!-- 상세직군 수정 -->
+        update roles
+           set ko_name = #{koName}
+             , grade_id = #{gradeId}
+             , role_category_id = #{roleCategoryId}
+         where id = #{id}
+    </update>
+
+    <insert id="insertDepth3" parameterType="Long">
+        insert into depth3_navigation_role
+        (
+            role_id
+          , depth3_navigation_id
+        )
+        values
+        (
+            #{roleId}
+          , #{depth3NavigationId}
+        )
+    </insert>
+</mapper>

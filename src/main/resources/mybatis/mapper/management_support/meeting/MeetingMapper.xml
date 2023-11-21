@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.meeting.MeetingMapper">
+
+    <select id="getMeetingList" resultType="yezak.api.api.management_support.meeting.dto.MeetingListDto" parameterType="yezak.api.api.management_support.meeting.dto.MeetingListReq">
+        <!-- 미팅 목록 -->
+        select m.id
+             , concat(m.date, ' ', case DATE_FORMAT(m.date, '%a')
+                                    when 'Mon' then '(월)'
+                                    when 'Tue' then '(화)'
+                                    when 'Wed' then '(수)'
+                                    when 'Thu' then '(목)'
+                                    when 'Fri' then '(금)'
+                                    when 'Sat' then '(토)'
+                                    when 'Sun' then '(일)'
+                                   end) as date
+              , concat(DATE_FORMAT(m.start_time, '%H:%i'), ' - ', DATE_FORMAT(m.end_time, '%H:%i')) as time
+              , m.location
+              , m.title
+              , u.name as create_user
+              , concat(min(umu.name), '님 외 ', (select count(user_id) -1 from meeting_user as mu where mu.meeting_id = m.id), '명') as attend_user
+              , (select concat(sum(if(mc.meeting_conclusion_status_id = 2 or mc.meeting_conclusion_status_id = 3, 1, 0)), ' / ' , sum(if(mc.meeting_conclusion_status_id is not null, 1, 0)))
+                   from meeting_conclusions as mc
+                  where mc.meeting_id = m.id) as status
+          from meetings as m
+     left join users as u
+            on m.user_id = u.id
+     left join meeting_user as mu
+            on m.id = mu.meeting_id
+     left join users as umu
+            on mu.user_id = umu.id
+     left join meeting_conclusions as mc
+            on m.id = mc.meeting_id
+     left join meeting_conclusion_statuses as mcs
+            on mc.meeting_conclusion_status_id = mcs.id
+        <where>
+            <if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+                and m.date between #{startDate} and #{endDate}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and m.title like concat('%', #{searchValue}, '%')
+                 or m.content like concat('%', #{searchValue}, '%')
+            </if>
+            <if test="startDate == null or startDate == '' or endDate == null or endDate == ''">
+                and m.date &gt;= date_sub(now(), interval 7 day)
+            </if>
+            and m.deleted_at is null
+            and m.hospital_id = #{hospitalId}
+        </where>
+      group by m.id
+      order by m.date desc, m.id desc
+         limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countMeetingList" resultType="int" parameterType="yezak.api.api.management_support.meeting.dto.MeetingListReq">
+        <!-- 미팅 페이징 -->
+        select count(*)
+          from
+        (select count(*)
+          from meetings as m
+     left join users as u
+            on m.user_id = u.id
+     left join meeting_user as mu
+            on m.id = mu.meeting_id
+     left join users as umu
+            on mu.user_id = umu.id
+     left join meeting_conclusions as mc
+            on m.id = mc.meeting_id
+     left join meeting_conclusion_statuses as mcs
+            on mc.meeting_conclusion_status_id = mcs.id
+        <where>
+            <if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+                and m.date between #{startDate} and #{endDate}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and m.title like concat('%', #{searchValue}, '%')
+                or m.content like concat('%', #{searchValue}, '%')
+            </if>
+            <if test="startDate == null or startDate == '' or endDate == null or endDate == ''">
+                and m.date &gt;= date_sub(now(), interval 7 day)
+            </if>
+            and m.deleted_at is null
+            and m.hospital_id = #{hospitalId}
+        </where>
+        group by m.id) as selection
+    </select>
+
+    <update id="deleteMeetings" parameterType="java.util.List">
+        <!-- 미팅 삭제 -->
+        update meetings
+           set deleted_at = now()
+         where id in
+        <foreach collection="list" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </update>
+
+    <insert id="createMeeting" parameterType="yezak.api.api.management_support.meeting.dto.MeetingReq" useGeneratedKeys="true" keyProperty="id">
+        <!-- 회의 생성 -->
+        insert into meetings
+        (
+            title
+          , date
+          , start_time
+          , end_time
+          , location
+          , user_id
+          , hospital_id
+        )
+        values
+        (
+            #{title}
+          , #{date}
+          , #{startTime}
+          , #{endTime}
+          , #{location}
+          , #{userId}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <insert id="createMeetingUser" parameterType="yezak.api.api.management_support.meeting.dto.MeetingReq">
+    <!-- 회의 생성 후 참여 유저 생성 -->
+            insert into meeting_user
+            (
+                meeting_id
+              , user_id
+            )
+            values
+        <foreach collection="attendUserIds" item="attendUserId" separator=",">
+            (
+                #{meetingId}
+              , #{attendUserId}
+            )
+        </foreach>
+    </insert>
+
+    <select id="meetingDetail" parameterType="Long" resultType="yezak.api.api.management_support.meeting.dto.MeetingDetailDto">
+        <!-- 회의 상세 -->
+        select m.title
+             , concat(m.date, ' ', case DATE_FORMAT(m.date, '%a')
+                                        when 'Mon' then '(월)'
+                                        when 'Tue' then '(화)'
+                                        when 'Wed' then '(수)'
+                                        when 'Thu' then '(목)'
+                                        when 'Fri' then '(금)'
+                                        when 'Sat' then '(토)'
+                                        when 'Sun' then '(일)'
+                                    end, ' ' , DATE_FORMAT(m.start_time, '%H:%i')) as date
+             , m.location
+             , u.name as create_user
+             , (select GROUP_CONCAT(u2.name SEPARATOR ', ')
+                  from meeting_user AS mu2
+             left join users AS u2
+                    on u2.id = mu2.user_id
+                 where mu2.meeting_id = m.id) AS attend_user
+             , m.content as meeting_content
+          from meetings as m
+     left join users as u
+            on m.user_id = u.id
+     left join meeting_conclusions as mc
+            on mc.meeting_id = m.id
+     left join meeting_conclusion_statuses as mcs
+            on mcs.id = mc.meeting_conclusion_status_id
+         where m.id = #{id}
+           and m.hospital_id = #{hospitalId}
+           and mc.deleted_at is null
+      group by m.id
+    </select>
+    <select id="conclusionList" parameterType="Long" resultType="yezak.api.api.management_support.meeting.dto.ConclusionListRes">
+        <!-- 회의 상세 아래 결정사항 리스트 -->
+        select mc.id as conclusion_id
+             , mc.content as conclusion_content
+             , date_format(mc.due, '%Y-%c-%d') as due_date
+             , date_format(mc.due, '%h:%i') as due_time
+             , u.id as managerId
+             , u.name as manager
+             , mcs.name as status_name
+          from meeting_conclusions as mc
+     left join users as u
+            on u.id = mc.user_id
+     left join meeting_conclusion_statuses as mcs
+            on mcs.id = mc.meeting_conclusion_status_id
+         where mc.meeting_id = #{conclusionId}
+    </select>
+
+
+    <update id="updateContent" parameterType="yezak.api.api.management_support.meeting.dto.UpdateContentReq">
+        <!-- 회의내용 수정 -->
+        update meetings
+           set content = #{meetingContent}
+         where id = #{meetingId}
+    </update>
+
+    <update id="updateConclusion" parameterType="yezak.api.api.management_support.meeting.dto.UpdateConclusionReq">
+        <!-- 결정사항 수정 -->
+        update meeting_conclusions
+           set content = #{conclusionContent}
+             , due = #{due}
+             , user_id = #{managerId}
+         where id = #{conclusionId}
+    </update>
+
+    <insert id="insertConclusion" parameterType="yezak.api.api.management_support.meeting.dto.InsertConclusionReq">
+        <!-- 결정사항 입력 -->
+        insert into meeting_conclusions
+        (
+            content
+          , due
+          , user_id
+          , meeting_id
+          , meeting_conclusion_status_id
+        )
+        values
+        (
+            #{conclusionContent}
+          , #{due}
+          , #{managerId}
+          , #{meetingId}
+          , 1
+        )
+    </insert>
+
+    <delete id="deleteConclusion" parameterType="Long">
+        <!-- 결정사항 삭제 -->
+        update meeting_conclusions
+           set deleted_at = now()
+         where id = #{conclusionId}
+    </delete>
+
+    <insert id="saveFileInfo" parameterType="yezak.api.api.management_support.meeting.dto.MeetingAttachmentDto">
+        <!--파일 정보 db 업로드 -->
+        insert into meeting_conclusion_attachments
+        (
+            meeting_conclusion_id
+          , file_name
+          , file_path
+          , file_extension
+          , file_size
+        )
+        values
+        (
+            #{meetingConclusionId}
+          , #{fileName}
+          , #{filePath}
+          , #{fileExtension}
+          , #{fileSize}
+        )
+    </insert>
+
+    <select id="normalConclusionDetail" parameterType="Long" resultType="yezak.api.api.management_support.meeting.dto.ConclusionDetailDto">
+        <!-- 일반권한 결정사항 보기 -->
+        select m.title
+             , mc.content
+             , date_format(mc.due, '%Y.%m.%d') as due_date
+             , date_format(mc.due, '%h:%i') as due_time
+             , u.name as manager
+             , mc.detail
+          from meeting_conclusions as mc
+     left join users as u
+            on u.id = mc.user_id
+     left join meetings as m
+            on m.id = mc.meeting_id
+         where mc.id = #{conclusionId}
+           and mc.deleted_at is null
+    </select>
+    
+    <update id="updateConclusionDetail" parameterType="yezak.api.api.management_support.meeting.dto.UpdateConclusionContentReq">
+        <!-- 결정사항 상세내용 업데이트 -->
+        update meeting_conclusions
+           set detail = #{detail}
+             , meeting_conclusion_status_id = 2
+         where id = #{conclusionId}
+    </update>
+
+    <select id="managerConclusionDetail" parameterType="Long" resultType="yezak.api.api.management_support.meeting.dto.AdminConclusionDetailDto">
+        <!-- 관리자 권한 결정사항 보기 -->
+        select m.title
+             , mc.content
+             , date_format(mc.due, '%Y.%m.%d') as due_date
+             , date_format(mc.due, '%h:%i') as due_time
+             , u.name as manager
+             , mc.detail
+             , mc.evaluation
+          from meeting_conclusions as mc
+     left join users as u
+            on u.id = mc.user_id
+     left join meetings as m
+            on m.id = mc.meeting_id
+         where mc.id = #{conclusionId}
+           and mc.deleted_at is null
+    </select>
+
+    <select id="findGrade" parameterType="Long" resultType="int">
+        <!-- 관리자인지 확인 -->
+        select r.grade_id
+          from roles as r
+     left join users as u
+            on u.role_id = r.id
+         where u.id = #{userId}
+    </select>
+
+    <select id="activeUsers" parameterType="Long" resultType="yezak.api.api.management_support.meeting.dto.ActiveUserDto">
+        <!-- 관리자인지 확인 -->
+        select id, name
+        from users
+        where hospital_id = #{hospitalId}
+        and is_deleted = 0
+        and is_stopped = 0
+    </select>
+
+    <update id="updateEvaluation" parameterType="yezak.api.api.management_support.meeting.dto.UpdateEvaluationReq">
+        <!-- 관리자 평가 수정 -->
+        update meeting_conclusions
+           set evaluation = #{evaluation}
+             , meeting_conclusion_status_id = 3
+         where id = #{conclusionId}
+    </update>
+
+    <select id="conclusionFileList" parameterType="Long" resultType="yezak.api.api.management_support.meeting.dto.ConclusionFileListRes">
+        select mca.id as fileId
+             , mca.file_path
+             , mca.file_name
+          from meeting_conclusion_attachments as mca
+     left join meeting_conclusions as mc
+            on mc.id = mca.meeting_conclusion_id
+         where mc.id = #{conclusionId}
+           and mc.deleted_at is null
+    </select>
+
+    <delete id="deleteConclusionFile" parameterType="Long">
+        delete from meeting_conclusion_attachments
+         where id = #{fileId}
+    </delete>
+
+    <select id="findFilePathById" parameterType="Long" resultType="String">
+        select file_path
+          from meeting_conclusion_attachments
+         where id = #{fileId}
+    </select>
+
+    <select id="countFileId" parameterType="Long" resultType="java.lang.Integer">
+        select count(id)
+          from meeting_conclusion_attachments
+         where meeting_conclusion_id = #{meetingConclusionId}
+    </select>
+</mapper>

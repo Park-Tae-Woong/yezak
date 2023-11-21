@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.attendance.vacation.VacationMapper">
+
+    <select id="myVacation" parameterType="yezak.api.api.management_support.attendance.vacation.dto.MyVacationReq" resultType="yezak.api.api.management_support.attendance.vacation.dto.MyVacationRes">
+        <!-- 휴가보유현황 -->
+        select u.name
+             , ei.joined_at
+             , paid_leave
+             , unpaid_leave
+             , sum(paid_leave + unpaid_leave) as total
+          from vacations as v
+     left join users as u
+            on u.id = v.user_id
+     left join employment_informations as ei
+            on ei.user_id = u.id
+         where year = #{year}
+           and u.id = #{id}
+    </select>
+    
+    <select id="vacationPlan" parameterType="yezak.api.api.management_support.attendance.vacation.dto.MyVacationReq" resultType="yezak.api.api.management_support.attendance.vacation.dto.VacationPlanRes">
+        <!-- 연차사용계획 -->
+        select concat(vup.year, '년 ', vup.quarter, '분기') as quarter
+             , sum(count) as days
+             , vup.created_at
+             , vup.id
+          from vacation_use_plans as vup
+     left join vacation_use_plan_details as vupd
+            on vup.id = vupd.vacation_use_plan_id
+     left join users as u
+            on u.id = vup.user_id
+         where vup.year = #{year}
+           and u.id = #{id}
+      order by created_at desc
+
+    </select>
+    
+    <select id="vacationRecord" parameterType="yezak.api.api.management_support.attendance.vacation.dto.VacationRecordReq" resultType="yezak.api.api.management_support.attendance.vacation.dto.VacationRecordRes">
+        <!-- 사용 기록 -->
+        select id
+             , is_paid_leave
+             , case
+                 when start_at is null then
+                    concat (date_format(start, '%Y.%m.%d'), ' ('
+                  , case dayofweek(start)
+                           when 1 then '일'
+                           when 2 then '월'
+                           when 3 then '화'
+                           when 4 then '수'
+                           when 5 then '목'
+                           when 6 then '금'
+                           when 7 then '토'
+                       end, ')', ' - '
+                  , date_format(end, '%Y.%m.%d'), ' ('
+                  , case dayofweek(end)
+                          when 1 then '일'
+                          when 2 then '월'
+                          when 3 then '화'
+                          when 4 then '수'
+                          when 5 then '목'
+                          when 6 then '금'
+                          when 7 then '토'
+                     end, ')')
+              else
+                    concat(date_format(start_at, '%Y.%m.%d'), ' ('
+                  , case dayofweek(start_at)
+                          when 1 then '일'
+                          when 2 then '월'
+                          when 3 then '화'
+                          when 4 then '수'
+                          when 5 then '목'
+                          when 6 then '금'
+                          when 7 then '토'
+                     end, ') ', date_format(start_at, '%H:%i'), ' - '
+                   , date_format(date_add(start_at, interval 4 hour), '%H:%i'))
+               end as date
+             , case
+                    when start_at is null then
+                         concat((end - start) + 1, '일')
+                    else '0.5일'
+               end as period
+             , created_at
+          from vacation_uses
+         where user_id = #{userId}
+           and (date_format(start, '%Y') = #{year} or date_format(start_at, '%Y') = #{year})
+      order by created_at desc
+    </select>
+
+    <delete id="deleteVacation" parameterType="Long">
+        <!-- 사용 기록 삭제 -->
+        delete from vacation_uses
+         where id = #{id}
+           and (start_at &gt;= now() or start &gt;= now());
+    </delete>
+
+    <update id="increasePaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation.dto.IncreasePaidLeaveReq">
+        <!-- 사용 기록 삭제 후 휴가 증가-->
+        update vacations
+           set paid_leave = paid_leave + #{paidLeave}
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+    <update id="increaseUnpaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation.dto.IncreaseUnpaidLeaveReq">
+        <!-- 사용 기록 삭제 후 휴가 증가-->
+        update vacations
+           set unpaid_leave = unpaid_leave + #{unpaidLeave}
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+
+    <select id="checkLeave" parameterType="Long" resultType="int">
+        <!-- 무급 유급 확인 -->
+        select is_paid_leave
+          from vacation_uses
+         where id = #{id}
+    </select>
+
+    <select id="calculateDay" parameterType="Long" resultType="double">
+        <!-- 증가시킬 휴가 갯수 -->
+        select (case
+                when start_at is null then ((end-start) + 1)
+                else 0.5
+                end) as day
+          from vacation_uses
+         where id = #{id}
+    </select>
+
+    <insert id="makeVacation" parameterType="yezak.api.api.management_support.attendance.vacation.dto.MakeVacationReq">
+        <!-- 휴가 등록 -->
+        insert into vacation_uses
+        (
+            user_id
+          , is_paid_leave
+          , start_at
+          , start
+          , end
+        )
+        values
+        (
+            #{userId}
+          , #{isPaidLeave}
+          , #{startAt}
+          , #{start}
+          , #{end}
+        )
+    </insert>
+<!--    <select id="countPaidLeave" parameterType="yezak.api.dto.vacation.VacationRecordDto" resultType="int">-->
+<!--        &lt;!&ndash; 유급 갯수 확인 &ndash;&gt;-->
+<!--        select paid_leave-->
+<!--          from vacations-->
+<!--         where user_id = #{userId}-->
+<!--           and year = #{year}-->
+
+<!--    </select>-->
+<!--    <select id="countUnpaidLeave" parameterType="yezak.api.dto.vacation.VacationRecordDto" resultType="int">-->
+<!--        &lt;!&ndash; 무급 갯수 확인 &ndash;&gt;-->
+<!--        select unpaid_leave-->
+<!--          from vacations-->
+<!--         where user_id = #{userId}-->
+<!--           and year = #{year}-->
+<!--    </select>-->
+    <update id="decreasePaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation.dto.DecreaseLeaveReq">
+        <!-- 유급휴가 감소 -->
+        update vacations
+           set paid_leave = paid_leave - (str_to_date(#{end}, '%Y-%m-%d') - str_to_date(#{start}, '%Y-%m-%d') + 1)
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+    <update id="decreaseUnpaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation.dto.DecreaseLeaveReq">
+        <!-- 무급휴가 감소 -->
+        update vacations
+           set unpaid_leave = unpaid_leave - (str_to_date(#{end}, '%Y-%m-%d') - str_to_date(#{start}, '%Y-%m-%d') + 1)
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+    <update id="decreaseHalfPaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation.dto.DecreaseHalfLeaveReq">
+        <!-- 반차 유급휴가 감소 -->
+        update vacations
+           set paid_leave = paid_leave - 0.5
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+    <update id="decreaseHalfUnpaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation.dto.DecreaseHalfLeaveReq">
+        <!-- 반차 무급휴가 감소 -->
+        update vacations
+           set unpaid_leave = unpaid_leave - 0.5
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+
+
+    <insert id="makeVacationPlan" parameterType="yezak.api.api.management_support.attendance.vacation.dto.VacationPlanReq" useGeneratedKeys="true" keyProperty="id">
+        <!-- 연차사용계획 등록 -->
+        insert into vacation_use_plans
+        (
+            user_id
+          , year
+          , quarter
+        )
+        values
+        (
+            #{userId}
+          , #{year}
+          , #{quarter}
+        )
+    </insert>
+    <insert id="makeVacationPlanDetail" parameterType="yezak.api.api.management_support.attendance.vacation.dto.VacationPlanDetailDto">
+        <!-- 연차사용계획 등록 상세 -->
+        insert into vacation_use_plan_details
+        (
+            vacation_use_plan_id
+          , start
+          , end
+          , count
+        )
+        values
+        (
+            #{vacationUsePlanId}
+          , #{start}
+          , #{end}
+          , (str_to_date(#{end}, '%Y-%m-%d') - str_to_date(#{start}, '%Y-%m-%d') + 1)
+        )
+    </insert>
+
+    <delete id="deleteVacationPlan" parameterType="Long">
+        delete from vacation_use_plan_details
+         where id = #{deleteId}
+    </delete>
+    <insert id="updateVacationPlanDetail" parameterType="yezak.api.api.management_support.attendance.vacation.dto.UpdateVacationPlanDetailReq">
+        <!-- 연차사용계획 등록 상세 -->
+        insert into vacation_use_plan_details
+        (
+            vacation_use_plan_id
+          , start
+          , end
+          , count
+        )
+        values
+        (
+            #{vacationUsePlanId}
+          , #{start}
+          , #{end}
+          , (str_to_date(#{end}, '%Y-%m-%d') - str_to_date(#{start}, '%Y-%m-%d') + 1)
+        )
+    </insert>
+
+    <select id="findByYearAndQuarter" parameterType="int" resultType="Long">
+        <!-- 년도 및 분기 중복 방지용 -->
+        select id
+          from vacation_use_plans
+         where year = #{year}
+           and quarter = #{quarter}
+    </select>
+
+</mapper>

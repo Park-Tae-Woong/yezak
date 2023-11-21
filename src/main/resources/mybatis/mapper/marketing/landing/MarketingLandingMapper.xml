@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.marketing.landing.MarketingLandingMapper">
+
+    <select id="getList" resultType="yezak.api.api.marketing.landing.dto.MarketingLandingListResponse">
+        SELECT
+            id AS id,
+            name AS koName,
+            landing_page_url AS landingPageUrl,
+            use_yn AS useYn,
+            remark AS remark
+        FROM access_roots
+        WHERE hospital_id = #{hospitalId}
+            AND deleted_at IS NULL
+          AND user_id IS NOT NULL
+        <if test="searchKeyword != null and searchKeyword != ''">
+            AND (name like concat('%', #{searchKeyword}, '%') OR remark like concat('%', #{searchKeyword}, '%'))
+        </if>
+        ORDER BY created_at DESC
+    </select>
+
+    <update id="deleteRow">
+        UPDATE access_roots SET
+        deleted_at = CURDATE()
+        WHERE id in (${id})
+        AND hospital_id = #{hospitalId}
+    </update>
+
+    <select id="getDetail" resultType="yezak.api.api.marketing.landing.dto.MarketingLandingListResponse">
+        SELECT
+            id AS id,
+            name AS koName,
+            landing_page_url AS landingPageUrl,
+            use_yn AS useYn,
+            remark AS remark
+        FROM access_roots
+        WHERE hospital_id = #{hospitalId}
+        AND id = #{id}
+    </select>
+
+    <update id="modifyData">
+        UPDATE access_roots SET
+            name = #{koName},
+            landing_page_url = #{landingPageUrl},
+            use_yn = #{useYn},
+            remark = #{remark}
+        WHERE id = #{id}
+        AND hospital_id = #{hospitalId}
+    </update>
+
+    <select id="checkAccessRootName" resultType="java.lang.Integer">
+        SELECT
+            COUNT(*)
+        FROM access_roots
+        WHERE hospital_id = #{hospitalId}
+        AND name = #{koName}
+        AND deleted_at is null
+    </select>
+
+    <insert id="registData">
+        INSERT INTO access_roots
+            (name, landing_page_url, use_yn, remark, hospital_id, user_id)
+        VALUES
+            (#{koName}, #{landingPageUrl}, #{useYn}, #{remark}, #{hospitalId}, #{userId})
+    </insert>
+
+    <select id="getKoNameById" resultType="java.lang.String">
+        SELECT
+            name AS koName
+        FROM access_roots
+        WHERE id = #{id}
+    </select>
+
+</mapper>

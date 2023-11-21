@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.admin.hospital.HospitalMapper">
+
+   <select id="hospitalInfo" parameterType="Long" resultType="yezak.api.api.admin.hospital.dto.HospitalInfoRes">
+       <!-- 요양병원 정보 -->
+       select h.name as hospital_name
+            , h.hospital_number
+            , h.business_registration_number
+            , u.name as user_name
+            , pi.first_registration_number
+            , pi.second_registration_number
+            , h.zip_code
+            , h.address
+            , h.address_detail
+            , h.phone_number
+         from hospitals as h
+    left join users as u
+           on u.hospital_id = h.id
+    left join personal_informations as pi
+           on u.id = pi.user_id
+    left join roles as r
+           on u.role_id = r.id
+        where h.id = #{id}
+          and r.role_category_id = 12
+   </select>
+
+    <update id="updateHospitalInfo" parameterType="yezak.api.api.admin.hospital.dto.UpdateHospitalInfoReq">
+        <!-- 요양병원 수정 -->
+        update hospitals as h
+     left join users as u
+            on u.hospital_id = h.id
+     left join personal_informations as pi
+            on u.id = pi.user_id
+     left join roles as r
+            on r.id = u.role_id
+           set h.name = #{hospitalName}
+             , h.hospital_number = #{hospitalNumber}
+             , h.business_registration_number = #{businessRegistrationNumber}
+             , u.name = #{userName}
+             , pi.first_registration_number = #{firstRegistrationNumber}
+             , pi.second_registration_number = #{secondRegistrationNumber}
+             , h.address = #{address}
+             , h.address_detail = #{addressDetail}
+             , h.zip_code = #{zipCode}
+             , h.phone_number = #{phoneNumber}
+         where h.id = #{id}
+           and r.role_category_id = 12
+    </update>
+
+    <select id="officeHourInfo" resultType="yezak.api.api.admin.hospital.dto.OfficeHourRes" parameterType="Long">
+        <!-- 근무 시간 정보 -->
+        select oh.id
+             , ohc.name
+             , date_format(oh.start, '%H:%i') as start
+             , date_format(oh.end, '%H:%i') as end
+             , oh.use_yn as useYn
+          from office_hours as oh
+     left join office_hour_categories as ohc
+            on oh.office_hour_category_id = ohc.id
+     left join hospitals as h
+            on h.id = oh.hospital_id
+         where h.id = #{id}
+    </select>
+
+    <select id="getHolidayRestYn" resultType="java.lang.Integer">
+        SELECT
+            holiday_rest_yn
+        FROM hospitals
+        WHERE id = #{id}
+    </select>
+
+    <update id="updateOfficeHour" parameterType="yezak.api.api.admin.hospital.dto.OfficeHourReq">
+        <!-- 근무 시간 수정 -->
+        update office_hours as oh
+     left join office_hour_categories as ohc
+            on oh.office_hour_category_id = ohc.id
+     left join hospitals as h
+            on h.id = oh.hospital_id
+           set oh.start = #{start}
+             , oh.end = #{end}
+             , oh.use_yn = #{useYn}
+         where oh.hospital_id = #{hospitalId}
+           and oh.id = #{id}
+    </update>
+
+    <update id="updateHolidayRestYn">
+        update hospitals set
+            holiday_rest_yn = #{holidayRestYn}
+        where id = #{hospitalId}
+    </update>
+
+    <select id="overtimeInfo" parameterType="Long" resultType="yezak.api.api.admin.hospital.dto.OvertimeRes">
+        <!-- 가산 시간 -->
+        select o.id
+             , o.use_yn
+             , oc.name
+             , date_format(o.start, '%H:%i') as defaultStart
+             , date_format(o.end, '%H:%i') as defaultEnd
+          from overtimes as o
+     left join overtime_categories as oc
+            on o.overtime_category_id = oc.id
+         where o.hospital_id = #{hospitalId}
+    </select>
+
+    <update id="updateOvertime" parameterType="yezak.api.api.admin.hospital.dto.OvertimeReq">
+        <!-- 가산 시간 수정 -->
+        update overtimes as o
+           set o.use_yn = #{useYn}
+             , o.start = #{defaultStart}
+             , o.end = #{defaultEnd}
+         where o.hospital_id = #{hospitalId}
+           and o.id = #{id};
+    </update>
+    <select id="findOvertimeCategoryId" parameterType="Long" resultType="Long">
+        select overtime_category_id
+          from overtimes
+         where hospital_id = #{hospitalId}
+           and id = #{id}
+    </select>
+
+    <select id="visitPurposeInfo" parameterType="Long" resultType="yezak.api.api.admin.hospital.dto.VisitPurposeRes">
+        <!-- 방문 목적 -->
+        select
+               id
+             , name
+             , is_coverage
+          from visit_purposes
+         where hospital_id = #{hospitalId}
+    </select>
+
+    <insert id="insertVisitPurpose" parameterType="yezak.api.api.admin.hospital.dto.InsertVisitPurposeReq">
+        <!-- 방문 목적 생성 -->
+        insert into visit_purposes
+        (
+            name
+          , is_coverage
+          , hospital_id
+        )
+        values
+        (
+            #{name}
+          , #{isCoverage}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <delete id="deleteVisitPurpose" parameterType="yezak.api.api.admin.hospital.dto.DeleteVisitPurposeReq">
+        <!-- 방문 목적 삭제 -->
+        delete from visit_purposes
+         where id = #{id}
+    </delete>
+
+    <update id="updateVisitPurpose" parameterType="yezak.api.api.admin.hospital.dto.UpdateVisitPurposeReq">
+        <!-- 방문 목적 수정 -->
+        update visit_purposes
+           set name = #{name}
+             , is_coverage = #{isCoverage}
+         where id = #{id}
+           and hospital_id = #{hospitalId}
+    </update>
+
+</mapper>

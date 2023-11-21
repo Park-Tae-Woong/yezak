@@ -1,0 +1,533 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.marketing.admin.MarketingManageAdminMapper">
+
+    <select id="getUserList" resultType="yezak.api.api.marketing.admin.dto.MarketingManageUserResponse">
+        SELECT
+            a.id AS value
+             ,a.name AS text
+        FROM users a, roles b, role_categories c
+        WHERE 1=1
+          AND a.role_id = b.id
+          AND b.role_category_id = c.id
+          AND a.hospital_id = #{hospitalId}
+          AND a.is_deleted = 0
+          AND c.id = 4 -- 전화상담사
+    </select>
+
+    <select id="getCounselingStatusesList" resultType="yezak.api.api.marketing.admin.dto.MarketingManageCounselingStatusesResponse">
+        SELECT
+            id as value
+            ,name as text
+        FROM counseling_statuses
+    </select>
+
+    <select id="getTotalDbCount" resultType="Integer" parameterType="java.util.HashMap">
+        select
+            count(*)
+        from patient_counseling_infos a, patients b
+        where a.patient_id = b.id
+          and b.hospital_id = #{hospitalId}
+          and to_days(a.created_at) between to_days(#{startDate}) and to_days(#{endDate})
+    </select>
+
+    <select id="getReservationCount" resultType="Integer" parameterType="java.util.HashMap">
+        select count(*) from (
+                                 select
+                                     pci.id
+                                 from patient_counseling_infos pci join patients p on pci.patient_id = p.id
+                                                                   join reservations r on r.patient_id = p.id
+                                 where p.hospital_id = #{hospitalId}
+                                   and to_days(pci.created_at) between to_days(#{startDate}) and to_days(#{endDate})
+                                   and r.reservation_status_id in (2,3,4) -- 예약상태 코드(1:- / 2:입금대기 / 3:입금 완료 / 4:예약 완료 / 5:예약취소 / 6:반환대기 / 7:반환완료)
+                                 group by pci.id
+                                 order by r.id desc
+                             ) a
+    </select>
+
+    <select id="getReservationFeeAmount" resultType="Integer" parameterType="java.util.HashMap">
+        select
+            IFNULL(sum(a.amount),0) as amount
+        from reservation_fees a, reservations b, patients c, patient_counseling_infos d
+        where a.reservation_id = b.id
+          and b.patient_id = c.id
+          and c.id = d.patient_id
+          and c.hospital_id = #{hospitalId}
+          and b.reservation_status_id = 3 -- 예약상태 코드(입금완료여야 함) (1:- / 2:입금대기 / 3:입금 완료 / 4:예약 완료 / 5:예약취소 / 6:반환대기 / 7:반환완료)
+          and to_days(a.created_at) between to_days(#{startDate}) and to_days(#{endDate})
+    </select>
+
+    <select id="getDashboardGenderAgeCount" resultType="java.util.HashMap">
+        SELECT
+            ageRange,
+            CASE sex_id
+            WHEN 1 THEN '남자'
+            WHEN 2 THEN '여자'
+            else '기타'
+            END AS gender,
+            IFNULL(count, 0) AS count
+        FROM (
+            SELECT
+                CASE
+                WHEN age <![CDATA[<=]]> 14 THEN '0-14'
+                WHEN age BETWEEN 15 AND 24 THEN '15-24'
+                WHEN age BETWEEN 25 AND 34 THEN '25-34'
+                WHEN age BETWEEN 35 AND 44 THEN '35-44'
+                WHEN age BETWEEN 45 AND 54 THEN '45-54'
+                WHEN age BETWEEN 55 AND 64 THEN '55-64'
+                ELSE '65+'
+                END AS ageRange,
+                sex_id,
+                COUNT(*) AS count
+            FROM (
+                    select
+                        p.sex_id,
+                        YEAR(CURDATE()) - (case p.second_registration_number
+                        when '0' then concat('18',left(p.first_registration_number,2))
+                        when '9' then concat('18',left(p.first_registration_number,2))
+                        when '3' then concat('20',left(p.first_registration_number,2))
+                        when '4' then concat('20',left(p.first_registration_number,2))
+                        else concat('19',left(p.first_registration_number,2))
+                        end) AS age
+                    from patients p join patient_counseling_infos pci on p.id = pci.patient_id
+                    and p.hospital_id = #{hospitalId}
+                    and to_days(pci.created_at) BETWEEN to_days(#{startDate}) AND to_days(#{endDate})
+            ) AS subquery
+            GROUP BY ageRange, sex_id
+        ) AS final_result
+        ORDER BY ageRange
+    </select>
+
+    <select id="getAccessRootCount" resultType="yezak.api.api.marketing.admin.dto.MarketingManageAdminDashboardAccessRootCount">
+        SELECT
+            a.access_root_id AS accessRootId
+             , b.name AS name
+             , count(*) AS count
+        FROM patients a, access_roots b, patient_counseling_infos c
+        WHERE 1=1
+          AND a.access_root_id = b.id
+          and a.id = c.patient_id
+          AND a.hospital_id = #{hospitalId}
+          AND to_days(c.created_at) BETWEEN to_days(#{startDate}) AND to_days(#{endDate})
+        AND b.use_yn = 1
+          and b.deleted_at is null
+        GROUP BY a.access_root_id
+        ORDER BY COUNT DESC
+        LIMIT 10
+    </select>
+
+    <select id="getDbCurrentStateCount" resultType="yezak.api.api.marketing.admin.dto.MarketingManageAdminDbCurrentStateCount">
+        select
+            a.count as totalCount,
+            b.count as chargeCount,
+            a.count - b.count as notChargeCount
+        from
+            (
+                select
+                    COUNT(*) as count
+                from
+                    patient_counseling_infos pci,
+                    patients p
+                where pci.patient_id = p.id
+                and p.hospital_id = #{hospitalId}
+                AND to_days(pci.created_at) BETWEEN to_days(#{startDate}) AND to_days(#{endDate})
+            ) AS a,
+            (
+                select
+                    COUNT(*) as count
+                from patient_counseling_infos pci join patients p on pci.patient_id = p.id
+                    join user_patient up on up.patient_id = p.id
+                    join users u on up.user_id = u.id
+                    join roles r on u.role_id = r.id
+                where p.hospital_id = #{hospitalId}
+                  and u.hospital_id = #{hospitalId}
+                  and r.role_category_id = 4 -- 전화 상담사
+                  AND to_days(pci.created_at) BETWEEN to_days(#{startDate}) AND to_days(#{endDate})
+            ) AS b
+    </select>
+
+    <select id="getDbChargeCurrentStateCount" resultType="yezak.api.api.marketing.admin.dto.MarketingManageAdminDbChargeCurrentStateCount">
+        SELECT
+            c.name AS name,
+            COUNT(c.name) AS count
+        from patient_counseling_infos pci join patients a on pci.patient_id = a.id
+            JOIN user_patient b ON a.id = b.patient_id
+            JOIN users c ON b.user_id = c.id
+            JOIN roles d ON c.role_id = d.id
+            JOIN role_categories e ON d.role_category_id = e.id
+        WHERE a.hospital_id = #{hospitalId}
+          AND to_days(pci.created_at) BETWEEN to_days(#{startDate}) AND to_days(#{endDate})
+          AND d.role_category_id = 4
+        GROUP BY
+            c.name
+        ORDER BY
+            c.name
+    </select>
+
+    <delete id="deleteData">
+        DELETE FROM patient_counseling_infos
+        WHERE id = #{id}
+    </delete>
+
+    <insert id="insertUserPatient" parameterType="java.util.HashMap">
+        INSERT INTO user_patient
+            (user_id, patient_id, role_category_id)
+        VALUES
+            (#{userId}, #{patientId}, (select role_category_id from roles where id = (SELECT role_id FROM users WHERE id = #{userId})))
+    </insert>
+
+    <insert id="insertUserPatientManual" parameterType="java.util.HashMap">
+        INSERT INTO user_patient
+            (user_id, patient_id, role_category_id)
+        VALUES
+            (#{userId}, (select patient_id from patient_counseling_infos where id = #{patientId} order by id desc limit 1), (select role_category_id from roles where id = (SELECT role_id FROM users WHERE id = #{userId})))
+    </insert>
+
+    <update id="updateUserPatient" parameterType="java.util.HashMap">
+        UPDATE user_patient SET
+            user_id = #{userId},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE patient_id = (select patient_id from patient_counseling_infos where id = #{patientId} order by id desc limit 1)
+        <!--AND id = #{chargeId}-->
+    </update>
+
+    <select id="searchPatient" resultType="yezak.api.api.marketing.admin.dto.MarketingManageAdminSearchPatientInfo" parameterType="java.lang.String">
+        SELECT
+            a.id AS patientId,
+            b.counseling_status_id AS counselStateId,
+            a.name AS name,
+            CONCAT(YEAR(STR_TO_DATE(SUBSTR(a.first_registration_number, 1, 6), '%y%m%d')), '-',
+                   LPAD(MONTH(STR_TO_DATE(SUBSTR(a.first_registration_number, 1, 6), '%y%m%d')), 2, '0'), '-',
+                   LPAD(DAY(STR_TO_DATE(SUBSTR(a.first_registration_number, 1, 6), '%y%m%d')), 2, '0'),
+                   SUBSTR(a.first_registration_number, 7, 13)) AS birth,
+            a.phone_number AS phoneNumber,
+            a.sex_id AS genderId,
+            a.marital_status AS marriedId,
+            a.address AS address,
+            a.access_root_id AS accessRootId,
+            a.inquiry AS inquiry
+        FROM patients a, patient_counseling_infos b
+        WHERE a.id = b.patient_id
+            AND a.name = #{param}
+            OR a.phone_number = #{param}
+    </select>
+
+    <select id="searchPatientById" resultType="yezak.api.api.marketing.admin.dto.MarketingManageAdminSearchPatientInfo" parameterType="java.lang.Long">
+        SELECT
+            a.id AS patientId,
+            b.counseling_status_id AS counselStateId,
+            a.name AS name,
+            CONCAT((case a.second_registration_number
+                        when '0' then concat('18',left(a.first_registration_number,2))
+                        when '9' then concat('18',left(a.first_registration_number,2))
+                        when '3' then concat('20',left(a.first_registration_number,2))
+                        when '4' then concat('20',left(a.first_registration_number,2))
+                        else concat('19',left(a.first_registration_number,2))
+                end),
+                   LPAD(MONTH(STR_TO_DATE(SUBSTR(a.first_registration_number, 1, 6), '%y%m%d')), 2, '0'),
+                   LPAD(DAY(STR_TO_DATE(SUBSTR(a.first_registration_number, 1, 6), '%y%m%d')), 2, '0'),
+                   SUBSTR(a.first_registration_number, 7, 13)) AS birth,
+            a.phone_number AS phoneNumber,
+            a.sex_id AS genderId,
+            a.marital_status AS marriedId,
+            a.address AS address,
+            a.access_root_id AS accessRootId,
+            a.inquiry AS inquiry,
+            b.available_time AS availableTime
+        FROM patients a, patient_counseling_infos b
+        WHERE a.id = b.patient_id
+            AND b.id = #{id}
+    </select>
+
+    <select id="searchPatientCounselingInfo" parameterType="java.lang.Long" resultType="yezak.api.api.marketing.admin.dto.MarketingManageAdminCounselHistoryInfo">
+        select
+            a.id AS patientId,
+            b.id AS counselingId,
+            d.ko_name AS roleName,
+            c.name AS userName,
+            b.asked_product AS askedProduct,
+            b.content AS content,
+            b.created_at AS createDate
+        from patients a, counselings b, users c, roles d
+        where a.id = b.patients_id
+          and b.user_id = c.role_id
+          and c.role_id = d.id
+          and a.id = #{patientId}
+    </select>
+
+    <select id="searchPatientCounselingInfoById" parameterType="java.lang.Long" resultType="yezak.api.api.marketing.admin.dto.MarketingManageAdminCounselHistoryInfo">
+        select
+            a.id AS patientId,
+            b.id AS counselingId,
+            d.ko_name AS roleName,
+            c.name AS userName,
+            b.asked_product AS askedProduct,
+            b.content AS content,
+            b.created_at AS createDate
+        from patients a, counselings b, users c, roles d, patient_counseling_infos pci
+        where a.id = b.patients_id
+          and b.user_id = c.id
+          and c.role_id = d.id
+          and a.id = pci.patient_id
+          and pci.id = #{id}
+        order by b.created_at desc
+    </select>
+
+    <insert id="registPatient" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageAdminRegistPatientRequest" useGeneratedKeys="true" keyProperty="id">
+<!--        <selectKey resultType="Long" keyProperty="patientId" order="AFTER">-->
+<!--            SELECT LAST_INSERT_ID()-->
+<!--        </selectKey>-->
+        INSERT INTO patients
+            (name, first_registration_number, phone_number, sex_id, marital_status, address, inquiry, hospital_id)
+        VALUES
+            (#{name}, RIGHT(#{birth},6), #{phoneNumber}, #{gender}, #{married}, #{address}, #{inquiry}, #{hospitalId})
+    </insert>
+
+    <insert id="registCounselings" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageAdminRegistPatientRequest">
+        INSERT INTO counselings
+            (patients_id, user_id, asked_product, content)
+        VALUES
+            (if(#{patientId} is null, (select id from patients where name = #{name} and phone_number = #{phoneNumber}), #{patientId}), #{chargeId}, #{askedProductStr}, #{counselContent})
+    </insert>
+
+    <insert id="registPatientCounselingInfos" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageAdminRegistPatientRequest">
+        INSERT INTO patient_counseling_infos
+            (patient_id, counseling_status_id, available_time)
+        VALUES
+            (if(#{patientId} is null, (select id from patients where name = #{name} and phone_number = #{phoneNumber} order by created_at desc limit 1), #{patientId}), #{counselState}, #{availableTime})
+    </insert>
+
+    <select id="getAccessRootList" resultType="yezak.api.api.marketing.admin.dto.AccessRoot">
+        SELECT
+            id as value,
+            name as text
+        FROM access_roots
+        WHERE use_yn = 1
+        and deleted_at is null
+        and hospital_id = #{hospitalId}
+    </select>
+
+    <select id="getPatientInfo" resultType="java.util.Map">
+        select
+            b.id
+        from patients a join patient_counseling_infos b on a.id = b.patient_id
+        where b.id = #{id}
+        order by to_days(b.available_time) asc
+    </select>
+
+    <select id="getDbChargeInfo" resultType="java.util.HashMap">
+        <!--
+        SELECT
+            c.id AS id,
+            COUNT(c.name) AS count
+        FROM
+            patient_counseling_infos pci join patients a on pci.patient_id = a.id
+            JOIN user_patient b ON a.id = b.patient_id
+            JOIN users c ON b.user_id = c.id
+            JOIN roles d ON c.role_id = d.id
+            JOIN role_categories e ON d.role_category_id = e.id
+        WHERE
+            a.hospital_id = #{hospitalId}
+          AND e.id = 4
+        GROUP BY
+            c.id
+        ORDER BY
+            count(c.id)
+            -->
+        select
+        u.id as id,
+        count(up.id) as count
+        from users u join roles r on u.role_id = r.id
+        join role_categories rc on rc.id = r.role_category_id
+        left outer join user_patient up on up.user_id = u.id
+        where u.hospital_id = #{hospitalId}
+        and rc.id = 4
+        group by id
+        order by count asc
+    </select>
+
+    <select id="getCntTest" resultType="java.util.HashMap">
+        SELECT
+            user_id AS userId,
+            TIMESTAMPDIFF(MONTH, created_at, CURDATE()) AS createdAtDiff,
+            TIMESTAMPDIFF(MONTH, updated_at, CURDATE()) AS updatedAtDiff
+        FROM counselings
+        WHERE patients_id = #{id}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <!--<insert id="registReservationInfo" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageAdminRegistPatientRequest">
+        <selectKey resultType="Long" keyProperty="reservationId" order="AFTER">
+            SELECT LAST_INSERT_ID()
+        </selectKey>
+        INSERT INTO reservations
+            (patient_id, room_id, reservation_status_id, reservated_at)
+        VALUES
+            (if(#{patientId} is null, (select id from patients where name = #{name} and phone_number = #{phoneNumber} order by created_at desc limit 1), #{patientId}), #{roomId}, IF(#{amount} > 0, 1, 2), #{reservatedAt}) &#45;&#45; 예약상태 id 정책필요 / (1:- / 2:입금대기 / 3:입금 완료 / 4:예약 완료 / 5:예약취소 / 6:반환대기 / 7:반환완료)
+    </insert>-->
+
+    <insert id="registReservationFee">
+        INSERT INTO reservation_fees
+            (reservation_id, amount, payment_method_id)
+        VALUES
+            (#{reservationId}, #{amount}, #{paymentMethodId})
+    </insert>
+
+    <select id="reservationInfo" resultType="yezak.api.api.marketing.admin.dto.MarketingManageReservationInfo">
+        select
+            a.id as id,
+            a.room_id as roomId,
+            c.ko_name as roomName,
+            a.reservated_at as reservationDate,
+            a.reservation_status_id as reservationStatusId,
+            d.name as reservationStatusName,
+            if(b.amount > 0, 'Y', 'N') as reservationFeeYn,
+            b.payment_method_id as paymentId,
+            e.name as paymentMethodName,
+            b.amount as amount,
+            a.cancel_reason as cancelReason
+        from reservations a join reservation_fees b on a.id = b.reservation_id
+                            join rooms c on a.room_id = c.id
+                            join reservation_statuses d on a.reservation_status_id = d.id
+                            left outer join payment_methods e on b.payment_method_id = e.id
+        where a.patient_id = #{patiendId}
+        order by a.id desc
+    </select>
+
+    <update id="modifyReservationStatus">
+        update reservations set
+            reservation_status_id = #{reservationStatus},
+            cancel_reason = #{cancelReason}
+        where id = #{id}
+    </update>
+
+    <select id="checkDbData" resultType="java.lang.Integer">
+        select
+            count(*)
+        from patients
+        where name = #{name}
+        and phone_number = #{phoneNumber}
+        and hospital_id = #{hospitalId}
+    </select>
+
+    <insert id="registPatientInfo" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageRegistPatientInfoRequest" useGeneratedKeys="true" keyProperty="id">
+<!--        <selectKey resultType="Long" keyProperty="id" order="AFTER">-->
+<!--            SELECT LAST_INSERT_ID()-->
+<!--        </selectKey>-->
+        INSERT INTO patients
+        (name, first_registration_number, second_registration_number, phone_number, sex_id, marital_status, address, hospital_id, access_root_id)
+        VALUES
+        (#{name}, RIGHT(#{birth},6), #{secondRegistrationNumber}, #{phoneNumber}, #{genderId}, #{marriedId}, #{address}, #{hospitalId}, #{accessRootId})
+    </insert>
+
+    <insert id="registPatientCounselingInfo" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageRegistPatientInfoRequest" useGeneratedKeys="true" keyProperty="id">
+<!--        <selectKey resultType="Long" keyProperty="patientCounselingId" order="AFTER">-->
+<!--            SELECT LAST_INSERT_ID()-->
+<!--        </selectKey>-->
+        INSERT INTO patient_counseling_infos
+            (patient_id, available_time)
+        VALUES
+            (if(#{id} is null, (select id from patients where name = #{name} and phone_number = #{phoneNumber} order by created_at desc limit 1), #{id}), #{availableTime})
+    </insert>
+
+    <select id="getPatientId" resultType="java.lang.Integer">
+        select
+            id
+        from patients
+        where name = #{name}
+          and phone_number = #{phoneNumber}
+        order by created_at desc
+        limit 1
+    </select>
+
+    <insert id="registCounselingInfo" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageRegistCounselingInfoRequest">
+        INSERT INTO counselings
+            (patients_id, user_id, asked_product, content)
+        VALUES
+            (#{patientsId}, #{userId}, #{askedProductStr}, #{counselContent})
+    </insert>
+
+    <insert id="registReservationInfo" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageRegistReservationInfoRequest" useGeneratedKeys="true" keyProperty="id">
+<!--        <selectKey resultType="Long" keyProperty="id" order="AFTER">-->
+<!--            SELECT LAST_INSERT_ID()-->
+<!--        </selectKey>-->
+        INSERT INTO reservations
+        (patient_id, room_id, reservation_status_id, reservated_at)
+        VALUES
+        (#{patientId}, #{roomId}, IF(#{reservationFeeYn} > 0, 2, 4), #{reservatedAt}) -- 예약상태 id 정책필요 / (1:- / 2:입금대기 / 3:입금 완료 / 4:예약 완료 / 5:예약취소 / 6:반환대기 / 7:반환완료)
+    </insert>
+
+    <update id="modifyPatientInfo">
+        update patients set
+            name = #{name},
+            first_registration_number = RIGHT(#{birth},6),
+            second_registration_number = #{secondRegistrationNumber},
+            phone_number = #{phoneNumber},
+            sex_id = #{genderId},
+            marital_status = #{marriedId},
+            address = #{address},
+            access_root_id = #{accessRootId}
+        where id = #{patientId}
+        and hospital_id = #{hospitalId}
+    </update>
+
+    <update id="modifyPatientCounselingInfo">
+        update patient_counseling_infos set
+        <if test="counselingStatusId != null">
+            counseling_status_id = #{counselingStatusId},
+        </if>
+            available_time = #{availableTime}
+        where id = #{patientCounselingInfoId}
+          and patient_id = #{patientId}
+    </update>
+
+    <select id="getPatientCounselingInfosIdList" resultType="java.lang.Integer">
+        <!--SELECT DISTINCT
+        p.id as id
+        FROM patient_counseling_infos pci
+                 JOIN patients p ON pci.patient_id = p.id
+                 LEFT OUTER JOIN access_roots ar ON p.access_root_id = ar.id
+                 LEFT OUTER JOIN user_patient up ON up.patient_id = p.id
+                 LEFT OUTER JOIN users u ON up.user_id = u.id
+                 LEFT OUTER JOIN counseling_statuses cs ON pci.counseling_status_id = cs.id
+                 LEFT OUTER JOIN reservations r ON p.id = r.patient_id
+                 LEFT OUTER JOIN reservation_statuses rs ON r.reservation_status_id = rs.id
+        WHERE p.hospital_id = #{hospitalId}
+          and ar.use_yn = 1
+          and ar.deleted_at is null
+          and u.name is null
+        ORDER BY pci.available_time-->
+        select distinct
+            p2.id
+        from patients p2 join patient_counseling_infos pci on p2.id = pci.patient_id where p2.id not in (
+            select distinct
+                up.patient_id
+            from user_patient up
+            where patient_id in (
+                select
+                    p.id
+                from patients p
+                where hospital_id = #{hospitalId}
+            )
+            order by up.patient_id
+        )
+        and p2.hospital_id = #{hospitalId}
+        order by pci.available_time asc
+    </select>
+
+    <select id="checkPatientCounselingInfo" parameterType="yezak.api.api.marketing.admin.dto.MarketingManageRegistPatientInfoRequest" resultType="java.lang.Integer">
+        select
+            count(*)
+        from patient_counseling_infos
+        where patient_id = (if(#{id} is null, (select id from patients where name = #{name} and phone_number = #{phoneNumber} and hospital_id = #{hospitalId} order by id desc limit 1), #{id}))
+    </select>
+
+    <select id="checkPciInfo" resultType="java.lang.Integer">
+        select
+            count(*)
+        from patient_counseling_infos
+        where patient_id = (select id from patients where name = #{name} and phone_number = #{phoneNumber} and hospital_id = #{hospitalId} order by id desc limit 1)
+    </select>
+
+</mapper>

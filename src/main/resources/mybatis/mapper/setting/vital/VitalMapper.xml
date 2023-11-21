@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.setting.vital.VitalMapper">
+
+    <select id="getVitalList" parameterType="Long" resultType="yezak.api.api.setting.vital.dto.VitalList">
+        <!-- 바이탈 목록 -->
+        select id
+             , use_yn
+             , ko_name
+             , unit
+             , low_value
+             , max_value
+             , sort
+             , is_fixed
+          from vital_sign_masters
+         where hospital_id = #{hospitalId}
+    </select>
+
+    <insert id="insertVital" parameterType="yezak.api.api.setting.vital.dto.VitalDto">
+        <!-- 바이탈 추가 -->
+        insert into vital_sign_masters
+        (
+            use_yn
+          , ko_name
+          , unit
+          , low_value
+          , max_value
+          , sort
+          , hospital_id
+        )
+        values
+        (
+            #{useYn}
+          , #{koName}
+          , #{unit}
+          , #{lowValue}
+          , #{maxValue}
+          , #{sort}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <update id="updateVital" parameterType="yezak.api.api.setting.vital.dto.UpdateVitalReq">
+        <!-- 바이탈 수정 -->
+        update vital_sign_masters
+           set use_yn = #{useYn}
+             , ko_name = #{koName}
+             , unit = #{unit}
+             , low_value = #{lowValue}
+             , max_value = #{maxValue}
+             , sort = #{sort}
+         where id = #{id}
+           and hospital_id = #{hospitalId}
+    </update>
+
+</mapper>

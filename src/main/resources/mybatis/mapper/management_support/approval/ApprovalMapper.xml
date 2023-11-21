@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.approval.ApprovalMapper">
+
+    <select id="getMyApprovalList" parameterType="yezak.api.api.management_support.approval.dto.ApprovalListReq" resultType="yezak.api.api.management_support.approval.dto.ApprovalListRes">
+        <!-- 결재요청 리스트 -->
+        select a.id                                             <!-- 결재요청 id -->
+             , af.name as form_name                             <!-- 서식명 -->
+             , u.name as user_name                              <!-- 요청자 -->
+             , a.asked_at                                       <!-- 요청일자 -->
+             , a.title                                          <!-- 제목 -->
+             , cs.name as confirmName                           <!-- 승인상태 -->
+          from asks as a
+     left join users as u
+            on u.id = a.ask_user_id
+     left join confirm_statuses as cs
+            on cs.id = a.total_confirm_statuses
+     left join ask_forms as af
+            on af.id = a.ask_form_id
+        <where>
+            <if test="askFormId != null and askFormId !=''">
+                and a.ask_form_id = #{askFormId}
+            </if>
+            <if test="start != null and start != '' and end != null and end != ''">
+                and a.asked_at between #{start} and #{end}
+            </if>
+            <if test="start == null and start == '' and end == null and end == ''">
+                and a.asked_at &gt;= date_sub(now(), interval 1 year)
+            </if>
+            <if test="totalConfirmStatuses != null and totalConfirmStatuses != ''">
+                and a.total_confirm_statuses = #{totalConfirmStatuses}
+            </if>
+            and a.hospital_id = #{hospitalId}
+            and a.deleted_at is null
+            and a.ask_user_id = #{myUserId}
+        </where>
+        order by asked_at desc
+    </select>
+
+    <select id="selectFormName" parameterType="Long" resultType="Map">
+        <!-- 서식명 리스트 -->
+        select id as value
+             , name as text
+          from ask_forms
+         where hospital_id = #{hospitalId}
+    </select>
+    <select id="selectStatus" resultType="Map">
+        <!-- 진행상태 리스트 -->
+        select id as value
+             , name as text
+          from confirm_statuses
+    </select>
+
+    <select id="getFormList" parameterType="Long" resultType="Map">
+        <!-- 서식 리스트 -->
+        select id
+             , name
+          from ask_forms
+         where hospital_id = #{hospitalId}
+           and deleted_at is null
+    </select>
+
+    <select id="getUseAndConfirmUser" parameterType="Long" resultType="yezak.api.api.management_support.approval.dto.UseAndConfirmUserRes">
+        <!-- 필드 사용 여부 확인용 및 승인대상 확인-->
+        select af.use_amount
+             , af.use_date
+             , af.use_remark
+             , af.use_attachments
+             , u.name as firstName                                      <!-- 1단계승인 -->
+             , u2.name as secondName                                    <!-- 2단계승인 -->
+          from ask_forms as af
+     left join users as u
+            on u.id = af.first_confirm_user
+     left join users as u2
+            on u2.id = af.second_confirm_user
+         where af.id = #{formId}
+    </select>
+
+    <select id="getMyInfo" parameterType="Long" resultType="Map">
+        <!-- 신청자 정보 -->
+        select r.ko_name as roleName
+             , u.name as userName
+          from users as u
+     left join roles as r
+            on r.id = u.role_id
+         where u.id = #{id}
+    </select>
+
+    <insert id="createApproval" parameterType="yezak.api.api.management_support.approval.dto.CreateApprovalReq" useGeneratedKeys="true" keyProperty="id">
+        <!-- 결재요청 등록 -->
+        insert into asks
+        (
+            asked_at                                            <!-- 요청일자 -->
+          , title                                               <!-- 제목 -->
+          , content                                             <!-- 내용 -->
+          , amount                                              <!-- 금액 -->
+          , date                                                <!-- 집행 예정 일자 -->
+          , remark                                              <!-- 비고 -->
+          , ask_user_id                                         <!-- 요청자 -->
+          , ask_form_id                                         <!-- 결재서식아이디 -->
+          , hospital_id                                         <!-- 병원id -->
+          , first_confirm_statuses
+          , second_confirm_statuses
+          , total_confirm_statuses
+        )
+        values
+        (
+            #{askedAt}
+          , #{title}
+          , #{content}
+          , #{amount}
+          , #{date}
+          , #{remark}
+          , #{askUserId}
+          , #{askFormId}
+          , #{hospitalId}
+          , 1
+          , 1
+          , 1
+        )
+    </insert>
+
+    <insert id="createApprovalFile" parameterType="yezak.api.api.management_support.approval.dto.ApprovalFileReq">
+        <!-- 첨부파일 등록 -->
+        insert into ask_attachments
+        (
+            ask_id
+          , file_name
+          , file_path
+          , file_extension
+          , file_size
+        )
+        values
+        (
+            #{askId}
+          , #{fileName}
+          , #{filePath}
+          , #{fileExtension}
+          , #{fileSize}
+        )
+    </insert>
+
+    <update id="deleteApproval" parameterType="Long">
+        <!-- 결재요청내역 삭제 -->
+        update asks
+           set deleted_at = now()
+         where id = #{id}
+    </update>
+
+    <select id="getApprovalList" parameterType="yezak.api.api.management_support.approval.dto.AdminApprovalListReq" resultType="yezak.api.api.management_support.approval.dto.ApprovalListRes">
+        <!-- 결재요청 리스트 -->
+        select a.id                                             <!-- 결재요청 id -->
+             , af.name as form_name                             <!-- 서식명 -->
+             , u.name as user_name                              <!-- 요청자 -->
+             , a.asked_at                                       <!-- 요청일자 -->
+             , a.title                                          <!-- 제목 -->
+             , cs.name as confirmName                           <!-- 승인상태 -->
+          from asks as a
+     left join users as u
+            on u.id = a.ask_user_id
+     left join confirm_statuses as cs
+            on cs.id = a.total_confirm_statuses
+     left join ask_forms as af
+            on af.id = a.ask_form_id
+        <where>
+            <if test="askFormId != null and askFormId !=''">
+                and a.ask_form_id = #{askFormId}
+            </if>
+            <if test="start != null and start != '' and end != null and end != ''">
+                and a.asked_at between #{start} and #{end}
+            </if>
+            <if test="start == null and start == '' and end == null and end == ''">
+                and a.asked_at &gt;= date_sub(now(), interval 1 year)
+            </if>
+            <if test="totalConfirmStatuses != null and totalConfirmStatuses != ''">
+                and a.total_confirm_statuses = #{totalConfirmStatuses}
+            </if>
+            and a.hospital_id = #{hospitalId}
+            and a.deleted_at is null
+        </where>
+        order by asked_at desc
+    </select>
+
+    <select id="getApprovalDetail" parameterType="Long" resultType="yezak.api.api.management_support.approval.dto.ApprovalDetailRes">
+        <!-- 결재상세내역 -->
+        select a.asked_at
+             , r.ko_name as roleName
+             , u.name as userName
+             , a.title
+             , a.content
+             , a.amount
+             , a.date
+             , a.remark
+             , aa.file_name
+             , cs.name as firstStatus
+             , u2.name as firstName
+             , cs2.name as secondStatus
+             , u3.name as secondName
+             , reject_reason
+          from asks as a
+     left join ask_forms as af
+            on af.id = a.ask_form_id
+     left join users as u
+            on a.ask_user_id = u.id
+     left join roles as r
+            on u.role_id = r.id
+     left join ask_attachments as aa
+            on aa.ask_id = a.id
+     left join confirm_statuses as cs
+            on cs.id = a.first_confirm_statuses
+     left join users as u2
+            on u2.id = af.first_confirm_user
+     left join confirm_statuses as cs2
+            on cs2.id = a.second_confirm_statuses
+     left join users as u3
+            on u3.id = af.second_confirm_user
+         where a.id = #{id}
+    </select>
+
+    <select id="findFormIdById" parameterType="Long" resultType="Long">
+        <!-- 서식 id 조회 -->
+        select ask_form_id
+          from asks
+         where id = #{id}
+    </select>
+    <select id="checkConfirmStatus" parameterType="Long" resultType="yezak.api.api.management_support.approval.dto.CheckConfirmStatus">
+        <!-- 승인 상태 조회 -->
+        select first_confirm_statuses
+             , second_confirm_statuses
+          from asks
+         where id = #{id}
+    </select>
+    <select id="checkConfirmUser" parameterType="Long" resultType="yezak.api.api.management_support.approval.dto.CheckConfirmUserRes">
+        <!-- 승인 유저 조회 -->
+        select first_confirm_user
+             , second_confirm_user
+          from ask_forms
+         where id = #{askFormId}
+    </select>
+
+    <update id="firstConfirmApproval" parameterType="yezak.api.api.management_support.approval.dto.ConfirmApprovalReq">
+        <!-- 1차 승인 수정 -->
+        update asks
+           set first_confirm_statuses = #{changeConfirmStatuses}
+             , remark = #{remark}
+         where id = #{id}
+    </update>
+
+    <update id="secondConfirmApproval" parameterType="yezak.api.api.management_support.approval.dto.ConfirmApprovalReq">
+        <!-- 2차 승인 수정 -->
+        update asks
+           set second_confirm_statuses = #{changeConfirmStatuses}
+             , remark = #{remark}
+         where id = #{id}
+    </update>
+
+    <update id="totalConfirmApproval" parameterType="Long">
+        <!-- 전체승인 수정 -->
+        update asks
+           set total_confirm_statuses = #{changeConfirmStatuses}
+         where id = #{id}
+    </update>
+
+    <update id="deleteForm" parameterType="Long">
+        <!-- 서식 삭제 -->
+        update ask_forms
+           set deleted_at = now()
+         where id = #{id}
+    </update>
+
+    <insert id="createForm" parameterType="yezak.api.api.management_support.approval.dto.CreateApprovalForm">
+        <!-- 서식 생성 -->
+        insert into ask_forms
+        (
+            hospital_id
+          , name
+          , use_amount
+          , use_date
+          , use_remark
+          , use_attachments
+          , first_confirm_user
+          , second_confirm_user
+        )
+        values
+        (
+            #{hospitalId}
+          , #{name}
+          , #{useAmount}
+          , #{useDate}
+          , #{useRemark}
+          , #{useAttachments}
+          , #{firstConfirmUser}
+          , #{secondConfirmUser}
+        )
+    </insert>
+    <select id="confirmUserList" parameterType="Long" resultType="Map">
+        <!-- 승인 유저 리스트 -->
+        select u.id
+             , u.name
+          from users as u
+     left join roles as r
+            on r.id = u.role_id
+     left join role_categories as rc
+            on rc.id = r.role_category_id
+         where u.hospital_id = #{hospitalId}
+           and rc.id in (1, 2, 3, 4, 5, 6, 12)
+    </select>
+
+
+</mapper>

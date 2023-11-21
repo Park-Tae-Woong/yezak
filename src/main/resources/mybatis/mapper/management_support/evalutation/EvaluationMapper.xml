@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.evaluation.form.EvaluationFormMapper">
+
+    <select id="countForm" parameterType="Long" resultType="Long">
+        select count(id)
+          from evaluation_forms
+         where hospital_id = #{hospitalId}
+           and deleted_at is null
+    </select>
+
+    <update id="deleteForm" parameterType="Long">
+        <!-- 평가지 삭제 -->
+        update evaluation_forms
+           set deleted_at = now()
+         where id = #{id}
+           and hospital_id = #{hospitalId}
+    </update>
+
+    <select id="formList" parameterType="Long" resultType="String">
+        <!-- 평가지 리스트 -->
+        select name
+          from evaluation_forms
+         where hospital_id = #{hospitalId}
+           and deleted_at is null
+    </select>
+
+    <select id="itemList" parameterType="Long" resultType="yezak.api.api.management_support.evaluation.form.dto.EvaluationItemList">
+        <!-- 평가항목 리스트 -->
+        select row_number() over (order by id) as no
+             , name
+             , max_value
+          from evaluation_items
+         where evaluation_form_id = #{evaluationFormId}
+           and deleted_at is null
+    </select>
+    
+    <select id="totalValue" parameterType="Long" resultType="int">
+        <!-- 평가점수 합계 -->
+        select sum(max_value) as sum
+          from evaluation_items
+         where evaluation_form_id = #{evaluationFormId}
+           and deleted_at is null
+    </select>
+
+    <insert id="insertForm" parameterType="yezak.api.api.management_support.evaluation.form.dto.InsertEvaluationFormReq" useGeneratedKeys="true" keyProperty="id">
+        <!--평가지 생성 -->
+        insert into evaluation_forms
+        (
+            name
+          , hospital_id
+        )
+        values
+        (
+            #{name}
+          , #{hospitalId}
+        )
+    </insert>
+    <insert id="insertItem" parameterType="yezak.api.api.management_support.evaluation.form.dto.InsertEvaluationItemReq">
+        <!-- 평가지 생성 -->
+        insert into evaluation_items
+        (
+            name
+          , max_value
+          , evaluation_form_id
+        )
+        values
+        (
+            #{itemName}
+          , #{maxValue}
+          , #{evaluationFormId}
+        )
+    </insert>
+
+    <update id="updateForm" parameterType="yezak.api.api.management_support.evaluation.form.dto.UpdateEvaluationForm">
+        <!-- 평가지 수정 -->
+        update evaluation_forms
+           set name = #{name}
+         where id = #{id}
+           and hospital_id = #{hospitalId}
+    </update>
+    <update id="updateItem" parameterType="yezak.api.api.management_support.evaluation.form.dto.UpdateEvaluationItem">
+        <!-- 평가지 수정 -->
+        update evaluation_items
+           set name = #{name}
+             , max_value = #{maxValue}
+         where evaluation_form_id = #{evaluationFormId}
+           and id = #{id}
+    </update>
+
+</mapper>

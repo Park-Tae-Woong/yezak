@@ -1,0 +1,51 @@
+version: '3.4'
+
+services:
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
+#    network_mode: host
+
+  dev:
+    image: ybyoon/yezak-api
+#    build:
+#      context: .
+#      dockerfile: ./Dockerfile-dev
+    ports:
+      - 50000:8080
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    depends_on:
+      - redis
+
+  main:
+    image: ybyoon/darwin-api
+#    build:
+#      context: .
+#      dockerfile: ./Dockerfile-main
+    ports:
+      - 8090:8080
+    environment:
+      - SPRING_PROFILES_ACTIVE=main
+    depends_on:
+      - redis
+
+#  blue:
+#    image: ybyoon/yezak-api
+#    build:
+#      context: .
+#      dockerfile: ./Dockerfile
+#    ports:
+#      - 50000:8080
+#    depends_on:
+#      - redis
+#  green:
+#    image: ybyoon/yezak-api
+#    build:
+#      context: .
+#      dockerfile: ./Dockerfile
+#    ports:
+#      - 50001:8080
+#    depends_on:
+#      - redis

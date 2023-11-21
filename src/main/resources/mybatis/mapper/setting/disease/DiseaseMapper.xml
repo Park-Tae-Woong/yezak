@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.setting.disease.DiseaseMapper">
+
+    <sql id="diseaseColumns">
+        <!-- 상병조회 공통 -->
+        select d.id
+             , do.id as disease_option_id
+             , do.custom_code
+             , d.disease_code
+             , d.ko_name
+             , d.en_name
+             , d.gender_classification
+             , d.perfect_code_checker
+             , d.main_sickness
+             , d.legal_infectious_disease
+          from diseases as d
+     left join disease_options as do
+            on do.disease_id = d.id
+    </sql>
+
+    <select id="customCodeByHospitalId" parameterType="Long" resultType="String">
+        select custom_code
+          from disease_options
+         where hospital_id = #{hospitalId}
+           and disease_id = #{diseaseId}
+    </select>
+
+    <select id="countTotal" parameterType="yezak.api.api.setting.disease.dto.FilterDiseaseReq" resultType="int">
+        select count(*)
+          from diseases as d
+     left join disease_options as do
+            on do.disease_id = d.id
+        <where>
+            <if test="perfectCodeChecker != null and perfectCodeChecker != ''">
+                <choose>
+                    <when test='perfectCodeChecker == "N"'>
+                        AND d.perfect_code_checker = 'N'
+                    </when>
+                    <when test='perfectCodeChecker == "Y"'>
+                        AND d.perfect_code_checker != 'N'
+                    </when>
+                </choose>
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and (do.custom_code like concat('%', #{searchValue}, '%')
+                or d.ko_name like concat('%', #{searchValue}, '%'))
+            </if>
+            and (do.hospital_id = #{hospitalId}
+            or do.hospital_id is null)
+        </where>
+    </select>
+
+    <select id="diseaseList" resultType="yezak.api.api.setting.disease.dto.DiseaseDto" parameterType="yezak.api.api.setting.disease.dto.FilterDiseaseReq">
+        <!-- 상병 조회 -->
+        <include refid="diseaseColumns" />
+        <where>
+            <if test="perfectCodeChecker != null and perfectCodeChecker != ''">
+                <choose>
+                    <when test='perfectCodeChecker == "N"'>
+                        AND d.perfect_code_checker = 'N'
+                    </when>
+                    <when test='perfectCodeChecker == "Y"'>
+                        AND d.perfect_code_checker != 'N'
+                    </when>
+                </choose>
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and (do.custom_code like concat('%', #{searchValue}, '%')
+                or d.ko_name like concat('%', #{searchValue}, '%'))
+            </if>
+            and (do.hospital_id = #{hospitalId}
+            or do.hospital_id is null)
+        </where>
+     order by d.disease_code asc
+        limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="findByDiseaseCode" resultType="yezak.api.api.setting.disease.dto.DiseaseDto" parameterType="Long">
+        <!-- 상병 개별 조회 -->
+        <include refid="diseaseColumns"/>
+        where d.id = #{id}
+    </select>
+
+    <select id="findByCustomCode" resultType="String" parameterType="yezak.api.api.setting.disease.dto.CustomCodeDuplicateCheck">
+        <!-- customCode 중복 확인을 위한 조회 -->
+        select custom_code
+          from disease_options
+         where custom_code = #{customCode}
+           and hospital_id = #{hospitalId}
+    </select>
+
+    <insert id="insertDiseaseOption" parameterType="yezak.api.api.setting.disease.dto.InsertDiseaseOptionReq">
+        <!-- 사용자코드 없을때는 처음 생성 -->
+        insert into disease_options
+        (
+            disease_id
+          , custom_code
+          , hospital_id
+        )
+        values
+        (
+            #{diseaseId}
+          , #{customCode}
+          , #{hospitalId}
+        )
+    </insert>
+    <update id="updateCode" parameterType="yezak.api.api.setting.disease.dto.UpdateDiseaseReq">
+        <!-- 사용자코드 update -->
+        update disease_options
+           set custom_code = #{customCode}
+         where id = #{diseaseId}
+           and hospital_id = #{hospitalId}
+    </update>
+    <select id="findDiseaseOption" parameterType="Long" resultType="Long">
+        select id
+          from disease_options
+         where disease_id = #{diseaseId}
+           and hospital_id = #{hospitalId}
+    </select>
+
+</mapper>

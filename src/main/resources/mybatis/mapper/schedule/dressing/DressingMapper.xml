@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.schedule.dressing.DressingMapper">
+
+    <select id="selectPatientsInfo" parameterType="String" resultType="yezak.api.api.schedule.dressing.dto.SearchPatientRes">
+        <!-- 검색 -->
+        SELECT p.id
+             , p.chart_number
+             , p.name as name
+             , concat(p.first_registration_number,'-',p.second_registration_number) as registrationNumber
+             , p.phone_number as phoneNumber
+          FROM patients p
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                AND (p.name like concat('%',#{searchValue},'%')
+                OR p.chart_number like concat('%',#{searchValue},'%')
+                OR p.first_registration_number like concat('%',#{searchValue},'%')
+                OR p.phone_number like concat('%',#{searchValue},'%'))
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <select id="getWaitList" parameterType="Long" resultType="yezak.api.api.schedule.dressing.dto.GetWaitList">
+        <!-- 대기리스트 -->
+        select p.chart_number
+             , p.name
+             , YEAR(CURDATE()) - (case p.second_registration_number
+                                    when '0' then concat('18',left(p.first_registration_number,2))
+                                    when '9' then concat('18',left(p.first_registration_number,2))
+                                    when '3' then concat('20',left(p.first_registration_number,2))
+                                    when '4' then concat('20',left(p.first_registration_number,2))
+                                    else concat('19',left(p.first_registration_number,2))
+                                  end) AS age
+             , s.name as sex
+             , rv.reservated_at
+             , room.id as room_id
+             , room.ko_name as room_name
+             , st.name as status
+          from patients p
+     left join sexes s
+            on s.id = p.sex_id
+     left join receptions r
+            on r.patient_id = p.id
+     left join rooms as room
+            on room.id = r.room_id
+     left join statuses as st
+            on st.id  = r.status_id
+     left join reservations as rv
+            on rv.id = r.reservation_id
+         where r.hospital_id = #{hospitalId}
+           and r.created_at = CURDATE()
+           and r.room_id = #{roomId}
+    </select>
+
+    <select id="selectRoomList" parameterType="Long" resultType="Map">
+        <!-- rooms 리스트 -->
+        select id as value
+             , ko_name as text
+          from rooms
+         where hospital_id = #{hospitalId}
+    </select>
+    
+    <select id="operationBasicInfo" parameterType="yezak.api.api.schedule.dressing.dto.OperationBasicInfoReq" resultType="yezak.api.api.schedule.dressing.dto.OperationBasicInfoRes">
+        <!-- 수술 기본 정보 -->
+        SELECT date_format(o.surgery_scheduled_time, "%Y-%m-%d") as date
+             , doctor.name AS doctor
+             , GROUP_CONCAT(nurse.name) AS nurse
+          FROM operations o
+     LEFT JOIN medical_records as mr
+            ON mr.id = o.medical_record_id
+     LEFT JOIN receptions as r
+            ON r.id = mr.reception_id
+     LEFT JOIN operation_user as ou
+            ON ou.operation_id = o.id
+     LEFT JOIN operation_user_types as oput
+            ON oput.id = ou.operation_user_type_id
+     LEFT JOIN users AS doctor
+            ON doctor.id = ou.user_id
+           AND ou.operation_user_type_id = 1
+     LEFT JOIN users AS nurse
+            ON nurse.id = ou.user_id
+           AND ou.operation_user_type_id = 3
+         WHERE r.patient_id = #{patientId}
+           AND o.id = #{operationId}
+           AND r.hospital_id = #{hospitalId}
+           and o.surgery_scheduled_time = #{date}
+    </select>
+
+    <select id="operationBasicInfoList" parameterType="yezak.api.api.schedule.dressing.dto.OperationBasicInfoReq" resultType="Map">
+        <!-- 수술 기본 정보 수가 리스트 -->
+        SELECT pc.code
+             , p.ko_name
+          FROM operations o
+     LEFT JOIN medical_records as mr
+            ON mr.id = o.medical_record_id
+     LEFT JOIN receptions as r
+            ON r.id = mr.reception_id
+     left join medical_record_prescription as mrp
+            on mrp.medical_record_id  = mr.id
+     left join prescriptions as p
+            on p.id = mrp.prescription_id
+     left join prescription_codes pc
+            on p.prescription_code_id = pc.id
+         WHERE r.patient_id = #{patientId}
+           AND o.id = #{operationId}
+           AND r.hospital_id = #{hospitalId}
+           and o.surgery_scheduled_time = #{date}
+    </select>
+
+    <select id="selectOperationDateList" parameterType="Long" resultType="Map">
+        <!-- 수술일자 리스트 -->
+        SELECT o.id as value
+             , date_format(o.surgery_scheduled_time, "%Y-%m-%d") as text
+          from operations o
+     left join medical_records mr
+            on mr.id = o.medical_record_id
+     left join receptions as r
+            on r.id = mr.reception_id
+         where r.patient_id = #{patientId}
+    </select>
+
+    <select id="selectDressingDateList" parameterType="Long" resultType="Map">
+        <!-- 드레싱 차트이력 날짜 리스트 -->
+        SELECT d.id as value
+             , date_format(d.created_at, "%Y-%m-%d") as text
+          from dressings d
+     left join operations o
+            on o.id = d.operation_id
+     left join medical_records mr
+            on mr.id = o.medical_record_id
+     left join receptions as r
+            on r.id = mr.reception_id
+         where r.patient_id = #{patientId}
+    </select>
+
+    <select id="patientVital" parameterType="Long" resultType="Map">
+        <!-- 환자 바이탈 -->
+        SELECT a.koName
+             , a.value
+          FROM (SELECT vsm.ko_name AS koName
+                     , pvs.value
+                     , ROW_NUMBER() OVER (PARTITION BY vsm.ko_name ORDER BY pvs.created_at DESC) AS rn
+                  FROM vital_sign_masters AS vsm
+             LEFT JOIN patient_vital_signs AS pvs
+                    ON pvs.vital_sign_master_name = vsm.id
+             LEFT JOIN medical_records AS mr
+                    ON mr.id = pvs.medical_record_id
+             LEFT JOIN receptions AS r
+                    ON r.id = mr.reception_id
+             LEFT JOIN patients AS p
+                    ON p.id = r.patient_id
+                 WHERE p.id = #{patientId}) AS a
+         WHERE rn = 1
+    </select>
+
+    <select id="dressingDetail" parameterType="Long" resultType="yezak.api.api.schedule.dressing.dto.DressingDetailRes">
+        <!-- 드레싱 상세 -->
+        SELECT d.created_at
+             , GROUP_CONCAT(DISTINCT u.name) as name
+             , GROUP_CONCAT(DISTINCT CONCAT(pc.code, ' ', p.ko_name) separator '\n') as info
+             , d.content
+          from dressings d
+     left join dressing_user du
+            on du.dressing_id = d.id
+     left join users as u
+            on u.id = du.user_id
+     left join operations o
+            on o.id = d.operation_id
+     left join medical_records mr
+            on mr.id = o.medical_record_id
+     left join medical_record_prescription mrp
+            on mrp.medical_record_id = mr.id
+     left join prescriptions p
+            on p.id = mrp.prescription_id
+     left join prescription_codes pc
+            on pc.id = p.prescription_code_id
+         where d.id = #{dressingId}
+    </select>
+
+    <insert id="insertDressing" parameterType="yezak.api.api.schedule.dressing.dto.InsertDressingReq" useGeneratedKeys="true" keyProperty="id">
+        insert into dressings
+        (
+            operation_id
+          , content
+        )
+        values
+        (
+            #{operationId}
+          , #{content}
+        )
+    </insert>
+    <insert id="insertDressingFile" parameterType="yezak.api.api.schedule.dressing.dto.InsertDressingFileReq">
+        insert into dressing_attachments
+        (
+            dressing_id
+          , file_name
+          , file_path
+          , file_extension
+          , file_size
+        )
+        values
+        (
+            #{dressingId}
+          , #{fileName}
+          , #{filePath}
+          , #{fileExtension}
+          , #{fileSize}
+        )
+    </insert>
+    <insert id="insertDressingUser" parameterType="yezak.api.api.schedule.dressing.dto.InsertDressingUserReq">
+        insert into dressing_user
+        (
+            dressing_id
+          , user_id
+        )
+        values
+        (
+            #{dressingId}
+          , #{userId}
+        )
+    </insert>
+
+
+</mapper>

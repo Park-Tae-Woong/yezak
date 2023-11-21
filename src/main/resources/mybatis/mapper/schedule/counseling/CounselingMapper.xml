@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.schedule.counseling.CounselingMapper">
+
+    <!-- 대면상담실 리스트 조회 -->
+    <select id="selectCounselingRoomList" parameterType="Long" resultType="yezak.api.api.schedule.counseling.dto.RoomListResponse">
+        /* selectCounselingRoomList */
+        SELECT
+            r.id
+             , r.ko_name
+        FROM rooms r
+        LEFT JOIN schedule_categories sc on r.schedule_category_id = sc.id
+        WHERE r.hospital_id = #{hospitalId}
+          AND sc.id = 1
+          AND r.deleted_at is null
+    </select>
+
+    <!-- 환자 조회 -->
+    <select id="selectPatients" parameterType="yezak.api.api.schedule.counseling.dto.SearchPatientsRequest" resultType="yezak.api.api.schedule.counseling.dto.PatientsResponse">
+        /* selectPatients */
+        SELECT
+            id
+            , chart_number
+            , name
+            , IF(first_registration_number is not null and second_registration_number is not null,
+                CONCAT(first_registration_number, '-', CONCAT(SUBSTRING(second_registration_number, 1, 1), REPEAT('*', CHAR_LENGTH(second_registration_number) - 1))),
+                null) as registration_no
+            , CONCAT(LEFT(phone_number, 3), '-', MID(phone_number, 4, 4), '-', RIGHT(phone_number, 4)) as phone_number
+        FROM
+            patients
+        WHERE hospital_id = #{hospitalId}
+            <if test="searchValue != null and searchValue !=''">
+                AND (
+                name LIKE CONCAT('%',#{searchValue},'%')
+                OR
+                chart_number LIKE CONCAT('%',#{searchValue},'%')
+                OR
+                first_registration_number LIKE CONCAT('%',#{searchValue},'%')
+                OR
+                phone_number LIKE CONCAT('%',#{searchValue},'%')
+                )
+            </if>
+    </select>
+
+    <!-- 대면상담실별 대기리스트 조회 -->
+    <select id="selectWaitingList" parameterType="yezak.api.api.schedule.counseling.dto.WaitingListRequest" resultType="yezak.api.api.schedule.counseling.dto.WaitingResponse">
+        /* selectWaitingList */
+        SELECT
+            rc.id as reception_id
+            , p.chart_number
+            , p.id as patient_id
+            , p.name
+            , DATE_FORMAT(rv.reservated_at, '%H:%i') as reserved_at
+            , (SELECT name FROM user_patient up LEFT JOIN users u ON up.user_id = u.id
+               WHERE up.patient_id = p.id AND up.role_category_id = #{roleId} AND up.deleted_at is null) as manager
+            , r.ko_name as room_name
+            , s.name as status
+        FROM
+            receptions rc
+        LEFT JOIN patients p ON rc.patient_id = p.id
+        LEFT JOIN reservations rv ON rc.reservation_id = rv.id
+        LEFT JOIN statuses s on rc.status_id = s.id
+        LEFT JOIN rooms r on rc.room_id = r.id
+        WHERE rc.room_id = #{roomId}
+          AND DATE_FORMAT(rc.created_at, '%Y-%m-%d') = CURDATE()
+        ORDER BY s.id DESC, rc.id ASC
+    </select>
+
+    <!-- 상태 리스트(셀렉트박스용) 조회 -->
+    <select id="selectStatusList" resultType="yezak.api.api.schedule.counseling.dto.StatusListResponse">
+        /* selectStatusList */
+        SELECT
+            id
+            , name
+        FROM statuses
+    </select>
+
+    <!-- 현재 대기리스트 상태 조회 -->
+    <select id="selectPresentStatus" parameterType="Long" resultType="Long">
+        /* selectPresentStatus */
+        SELECT
+            status_id
+        FROM receptions
+        WHERE patient_id = #{patientId}
+    </select>
+
+    <!-- 대기리스트 상태 업데이트 -->
+    <update id="updateWaitingStatus" parameterType="yezak.api.api.schedule.counseling.dto.UpdateWaitingStatusRequest">
+        /* updateWaitingStatus */
+        UPDATE receptions
+        SET status_id = #{statusId}
+        WHERE patient_id = #{patientId}
+    </update>
+
+    <!-- 환자 이름 / 가족력 조회 -->
+    <select id="selectNameAndInheritFactor" parameterType="Long" resultType="yezak.api.api.schedule.counseling.dto.NameInheritFactor">
+        /* selectNameAndInheritFactor */
+        SELECT
+            p.name
+            , mr.inherit_factor
+        FROM
+            medical_records mr
+        LEFT JOIN receptions r ON mr.reception_id = r.id
+        LEFT JOIN patients p ON r.patient_id = p.id
+        WHERE p.id = #{patientId}
+        ORDER BY mr.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 바이탈 컬럼 조회 -->
+    <select id="selectVitalColumns" parameterType="Long" resultType="yezak.api.api.schedule.counseling.dto.VitalSignColumns">
+        /* selectVitalColumns */
+        SELECT
+            id
+            , ko_name
+            , sort
+            , unit
+        FROM vital_sign_masters
+        WHERE hospital_id = #{hospitalId}
+          AND use_yn = '1'
+        ORDER BY sort ASC
+    </select>
+
+    <!-- 오늘 바이탈 정보 조회 -->
+    <select id="selectTodaysVital" parameterType="Long" resultType="yezak.api.api.schedule.counseling.dto.PatientVitalSignsResponse">
+        /* selectTodaysVital */
+        SELECT
+            pvs.id
+             , pvs.vital_sign_master_name
+             , pvs.value
+             , DATE_FORMAT(pvs.created_at, '%Y.%m.%d') as created_at
+        FROM patient_vital_signs pvs
+        LEFT JOIN medical_records mr ON pvs.medical_record_id = mr.id
+        LEFT JOIN receptions r ON mr.reception_id = r.id
+        LEFT JOIN patients p ON r.patient_id = p.id
+        INNER JOIN (
+            SELECT vital_sign_master_name, MAX(id) AS maxId
+            FROM patient_vital_signs
+            GROUP BY vital_sign_master_name
+        ) max ON pvs.vital_sign_master_name = max.vital_sign_master_name AND pvs.id = max.maxId
+        WHERE p.id = #{patientId}
+          AND DATE_FORMAT(pvs.created_at, '%Y-%m-%d') = CURDATE()
+        ORDER BY pvs.id DESC
+    </select>
+
+    <!-- 가장 최근 진료기록 id 조회 -->
+    <select id="selectRecentMedicalRecordId" parameterType="Long" resultType="Long">
+        /* selectRecentMedicalRecordId */
+        SELECT
+            mr.id
+        FROM
+            medical_records mr
+            LEFT JOIN receptions r ON mr.reception_id = r.id
+            LEFT JOIN patients p ON r.patient_id = p.id
+        WHERE p.id = #{patientId}
+        ORDER BY mr.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 바이탈 과거이력 조회 -->
+    <select id="selectVitalHistory" parameterType="Long" resultType="yezak.api.api.schedule.counseling.dto.VitalHistoryResponse">
+        /* selectVitalHistory */
+        SELECT
+             pvs.vital_sign_master_name as vitalId
+             , pvs.value
+             , DATE_FORMAT(pvs.created_at, '%Y.%m.%d') as created_at
+        FROM patient_vital_signs pvs
+        LEFT JOIN medical_records mr ON pvs.medical_record_id = mr.id
+        LEFT JOIN receptions r ON mr.reception_id = r.id
+        LEFT JOIN patients p ON r.patient_id = p.id
+        INNER JOIN (
+            SELECT vital_sign_master_name, MAX(id) AS maxId
+            FROM patient_vital_signs
+            WHERE DATE_FORMAT(created_at, '%Y-%m-%d') != CURDATE()
+            GROUP BY vital_sign_master_name, DATE_FORMAT(created_at, '%Y-%m-%d')
+        ) max ON pvs.vital_sign_master_name = max.vital_sign_master_name AND pvs.id = max.maxId
+        WHERE p.id = #{patientId}
+        ORDER BY pvs.id DESC
+    </select>
+
+    <!-- 오늘 진료 기록 유무 조회 -->
+    <select id="selectTodayMedicalRecord" parameterType="Long" resultType="int">
+        SELECT count(mr.id)
+        FROM medical_records mr
+        LEFT JOIN receptions r ON mr.reception_id = r.id
+        LEFT JOIN patients p ON r.patient_id = p.id
+        WHERE p.id = #{patientId}
+          AND DATE_FORMAT(mr.created_at, '%Y-%m-%d') = CURDATE()
+    </select>
+
+    <!-- 바이탈 정보 등록 -->
+    <insert id="insertPatientVital" parameterType="yezak.api.domain.schedule.counseling.PatientVitalSignsTbl">
+        /* insertPatientVital */
+        INSERT
+        INTO
+            patient_vital_signs
+            (vital_sign_master_name, medical_record_id, value, created_at)
+        VALUES
+            (#{vitalSignMasterName}, #{medicalRecordId}, #{value}, now())
+    </insert>
+
+    <!-- 대면상담 저장 -->
+    <!-- 병원 상품 조회 -->
+    <select id="selectProducts" parameterType="yezak.api.api.schedule.counseling.dto.SearchProductsRequest" resultType="yezak.api.api.schedule.counseling.dto.ProductsResponse">
+        /* selectProducts */
+        SELECT
+            po.custom_code
+            , p.ko_name as product
+            , IFNULL(p.clinic_price, po.uninsured_price) as price
+        FROM
+            prescriptions p
+        LEFT JOIN prescription_options po on p.prescription_code_id = po.prescription_code_id
+        WHERE po.hospital_id = #{hospitalId}
+          AND po.is_product = 'y'
+        <if test="searchValue != null and searchValue !=''">
+            AND (
+            po.custom_code LIKE CONCAT('%',#{searchValue},'%')
+            OR
+            p.ko_name LIKE CONCAT('%',#{searchValue},'%')
+            )
+        </if>
+    </select>
+
+    <!-- 보낼 방 조회 -->
+    <select id="selectRoomList" parameterType="Long" resultType="yezak.api.api.schedule.counseling.dto.RoomListResponse">
+        /* selectRoomList */
+        SELECT
+            r.id
+            , r.ko_name
+        FROM rooms r
+        WHERE r.hospital_id = #{hospitalId}
+          AND r.deleted_at is null
+    </select>
+
+    <!-- TODO: 방에 맞는 담당자 조회 -->
+
+    <!-- 상담 내용 insert -->
+    <insert id="insertCounseling" parameterType="yezak.api.domain.schedule.counseling.CounselingsTbl" useGeneratedKeys="true" keyProperty="id">
+        /* insertCounseling */
+        INSERT
+        INTO
+            counselings
+            (patients_id, user_id, asked_product, content, created_at, updated_at)
+        VALUES
+            (#{patientsId}, #{userId}, #{askedProduct}, #{content}, now(), now())
+    </insert>
+
+    <!-- 일정 예약 insert -->
+    <insert id="insertReservation" parameterType="yezak.api.api.schedule.counseling.dto.ReservationRequest">
+        /* insertReservation */
+        INSERT
+        INTO
+            reservations
+            (patient_id, room_id, reservated_at, created_at, updated_at)
+        VALUES
+            (#{patientId}, #{roomId}, #{reservatedAt}, now(), now())
+    </insert>
+
+    <!-- 대기리스트 상태 업데이트 -->
+    <update id="updateReception" parameterType="yezak.api.api.schedule.counseling.dto.UpdateReceptionRequest">
+        /* updateReception */
+        UPDATE receptions
+        SET room_id = #{roomId}
+            , status_id = #{statusId}
+        WHERE patient_id = #{patientId}
+          AND DATE_FORMAT(created_at, '%Y-%m-%d') = CURDATE()
+          AND updated_user_id = #{updatedUserId}
+    </update>
+
+    <!-- 이미지 insert -->
+    <insert id="insertCounselingImage" parameterType="yezak.api.domain.schedule.counseling.CounselingAttachmentsTbl">
+        /* insertCounselingImage */
+        INSERT
+        INTO
+            counseling_attachments
+            (counseling_id, file_name, file_path, file_extension, file_size, created_at, updated_at)
+        VALUES
+            (#{counselingId}, #{fileName}, #{filePath}, #{fileExtension}, #{fileSize}, now(), now())
+    </insert>
+
+    <!-- 상담 차트이력 조회 -->
+    <!-- TODO: asked_product 변경 필요 -->
+    <select id="selectCounselingHistoryList" parameterType="Long" resultType="yezak.api.api.schedule.counseling.dto.CounselingHistoryResponse">
+        /* selectCounselingHistoryList */
+        SELECT
+            c.id
+            , DATE_FORMAT(c.created_at, '%Y.%m.%d %H:%m') as created_at
+            , rc.ko_name as job_name
+            , u.name as manager
+            , c.asked_product
+            , c.content
+        FROM counselings c
+        LEFT JOIN patients p ON p.id = c.patients_id
+        LEFT JOIN users u ON u.id = c.user_id
+        LEFT JOIN roles r ON r.id = u.role_id
+        LEFT JOIN role_categories rc on r.role_category_id = rc.id
+        WHERE p.id = #{patientId}
+        ORDER BY c.id DESC
+    </select>
+
+    <!-- 상담 내용 업데이트 시 오늘 날짜인지 조회 -->
+    <select id="selectCounselingCreatedAtTodayYn" parameterType="Long" resultType="boolean">
+        SELECT IF(DATE_FORMAT(created_at, '%Y-%m-%d') = CURDATE(), true, false)
+        FROM counselings
+        WHERE id = #{id}
+    </select>
+
+    <!-- 상담 내용 업데이트 -->
+    <update id="updateCounselingContent" parameterType="yezak.api.api.schedule.counseling.dto.UpdateCounselingRequest">
+        /* updateCounselingContent */
+        UPDATE counselings
+        SET content = #{content}
+            , updated_at = now()
+        WHERE id = #{id}
+          AND DATE_FORMAT(created_at, '%Y-%m-%d') = CURDATE()
+    </update>
+
+</mapper>

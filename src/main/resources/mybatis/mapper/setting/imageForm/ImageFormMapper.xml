@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.setting.imageForm.ImageFormMapper">
+
+    <insert id="insertForm" parameterType="yezak.api.api.setting.imageForm.dto.ImageFormReq" useGeneratedKeys="true" keyProperty="id">
+        <!--패드 서식 insert -->
+        insert into image_forms
+        (
+            hospital_id
+          , name
+        )
+        values
+        (
+            #{hospitalId}
+          , #{name}
+        )
+    </insert>
+
+    <insert id="saveFileInfo" parameterType="yezak.api.api.setting.imageForm.dto.ImageFormAttachmentDto">
+        <!--파일 정보 db 업로드 -->
+        insert into image_form_attachments
+        (
+            image_form_id
+          , file_name
+          , file_path
+          , file_extension
+          , file_size
+        )
+        values
+        (
+            #{imageFormId}
+          , #{fileName}
+          , #{filePath}
+          , #{fileExtension}
+          , #{fileSize}
+        )
+    </insert>
+
+    <select id="getFormList" resultType="yezak.api.api.setting.imageForm.dto.ImageFormRes" parameterType="yezak.api.api.setting.imageForm.dto.ImageFormFilter">
+        <!-- 서식 목록 -->
+        select imf.id
+             , imf.name
+             , imf.created_at
+             , imfa.file_path
+          from image_forms as imf
+     left join image_form_attachments as imfa
+            on imf.id = imfa.image_form_id
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and name like concat('%', #{searchValue}, '%')
+            </if>
+            and imf.deleted_at is null
+            and imf.hospital_id = #{hospitalId}
+        </where>
+    </select>
+
+    <update id="deleteForm" parameterType="Long">
+        <!-- 서식 삭제 -->
+        update image_forms as ifom
+     left join image_form_attachments as ifam
+            on ifom.id = ifam.image_form_id
+           set ifom.deleted_at = now()
+             , ifam.deleted_at = now()
+         where ifom.id = #{id}
+    </update>
+    <update id="deleteFormAttach" parameterType="Long">
+        update image_form_attachments
+           set deleted_at = now()
+         where image_form_id = #{id}
+    </update>
+
+    <select id="findDuplicateName" parameterType="java.lang.String" resultType="java.lang.String">
+        select name
+          from image_forms
+         where name = #{name}
+    </select>
+</mapper>

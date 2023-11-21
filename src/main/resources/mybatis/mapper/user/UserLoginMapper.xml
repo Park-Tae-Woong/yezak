@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.user.login.UserLoginMapper">
+
+    <select id="login" parameterType="yezak.api.api.user.dto.UserLoginReq" resultType="yezak.api.api.user.dto.UserLoginReq">
+        <!-- 로그인 -->
+        SELECT *
+          FROM users
+         WHERE (email = #{email}
+           and password = #{password})
+            or (email = #{email}
+           and temporary_password = #{password}
+           and temporary_password_expired_at &gt; now())
+    </select>
+
+    <select id="findById" parameterType="Long" resultType="yezak.api.domain.User">
+        select *
+          from users
+         where id = #{id}
+    </select>
+
+    <select id="findByEmail" parameterType="String" resultType="yezak.api.domain.User">
+        SELECT *
+          FROM users
+         WHERE email = #{email}
+    </select>
+
+    <select id="getLastPasswordChange" parameterType="string" resultType="date">
+        <!-- 비밀번호 변경일 조회-->
+        SELECT password_changed_at
+          FROM users
+         WHERE email = #{email}
+    </select>
+    <select id="getCreatedAt" parameterType="string" resultType="date">
+        <!-- 비밀번호 변경일 조회-->
+        SELECT created_at
+          FROM users
+         WHERE email = #{email}
+    </select>
+
+    <update id="updateLoginFail" parameterType="String">
+        <!-- 로그인 실패 횟수 증가 -->
+        update users
+           set failed_count = failed_count + 1
+             , is_locked = case
+                            when failed_count &gt;= 5
+                            then 1
+                            else 0
+                           end
+         where email = #{email}
+    </update>
+
+    <update id="resetLoginFail" parameterType="String">
+        <!-- 로그인 실패 횟수 초기화 -->
+        update users
+           set failed_count = 0
+         where email = #{email}
+    </update>
+
+    <select id="getLoginCount" resultType="int" parameterType="String">
+        <!-- 로그인 실패 횟수 조회 -->
+        select failed_count
+          from users
+         where email = #{email}
+    </select>
+
+    <select id="nameAndRoleName" parameterType="Long" resultType="yezak.api.api.user.dto.NameAndRoleName">
+        select u.name
+             , r.ko_name as roleName
+          from users as u
+     left join roles as r
+            on u.role_id = r.id
+         where u.id = #{id}
+    </select>
+
+    <update id="findPassword" parameterType="yezak.api.api.user.dto.FindPasswordReq">
+        <!-- 비밀먼호 잊었을 때 -->
+        update users
+           set temporary_password = #{password}
+             , temporary_password_expired_at = now() + interval 1 hour
+             , failed_count = 0
+             , is_locked = 0
+         where email = #{email}
+    </update>
+    <update id="resetPassword" parameterType="String">
+        update users
+           set password = null
+         where email = #{email}
+    </update>
+
+    <select id="getIsLocked" parameterType="String" resultType="int">
+        select is_locked
+          from users
+         where email = #{email}
+    </select>
+
+    <select id="myNaviList" parameterType="Long" resultType="Long">
+        select depth3_navigation_id
+          from depth3_navigation_role
+         where role_id = #{roleId}
+    </select>
+
+    <select id="selectGradeList" resultType="Map">
+        select id as value
+             , name as text
+          from grades
+    </select>
+</mapper>

@@ -1,0 +1,106 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '2.7.10'
+	id 'io.spring.dependency-management' version '1.0.15.RELEASE'
+}
+
+group = 'yezak'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '17'
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+
+dependencies {
+	// Spring Boot 관련 의존성
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+
+	// MyBatis 관련 의존성
+	implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:2.3.0'
+
+	// S3 의존성
+	implementation 'com.amazonaws:aws-java-sdk:1.12.135'
+
+	// JWT 관련 의존성
+	implementation "io.jsonwebtoken:jjwt-api:0.11.5" // jjwt-api
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5' // jjwt-impl
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5' // jjwt-jackson
+
+	// 기타 의존성
+	implementation group: 'org.json', name: 'json', version: '20220320' // JSON 라이브러리
+	compileOnly 'org.projectlombok:lombok' // 롬복
+	runtimeOnly 'com.mysql:mysql-connector-j' // MySQL JDBC 드라이버
+	annotationProcessor 'org.projectlombok:lombok' // 롬복 Annotation Processor
+	testImplementation 'org.springframework.boot:spring-boot-starter-test' // 테스트 의존성
+	testImplementation 'org.springframework.security:spring-security-test' // Spring Security 테스트 의존성
+
+	implementation 'org.apache.tomcat.embed:tomcat-embed-core:9.0.52' // Tomcat Core
+//	implementation 'org.apache.tomcat.embed:tomcat-embed-logging-juli:9.0.52' // Tomcat 로깅
+	implementation group: 'org.apache.tomcat.embed', name: 'tomcat-embed-logging-juli', version: '9.0.0.M6'
+	implementation 'org.apache.tomcat.embed:tomcat-embed-jasper:9.0.52' // JSP 지원
+	implementation 'javax.servlet:javax.servlet-api:4.0.1' // Servlet API
+//	implementation 'javax.servlet.jsp:jsp-api:2.3.3' // JSP API
+	compileOnly group: 'javax.servlet.jsp', name: 'javax.servlet.jsp-api', version: '2.3.3'
+	implementation 'javax.servlet:jstl:1.2'
+
+	//log4jdbc
+	implementation 'org.bgee.log4jdbc-log4j2:log4jdbc-log4j2-jdbc4.1:1.16'
+
+	//구글 메일
+//	implementation 'com.sun.mail:javax.mail:1.6.5'
+	implementation group: 'com.sun.mail', name: 'javax.mail', version: '1.6.2'
+
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+	implementation 'commons-io:commons-io:2.11.0'
+
+	implementation 'com.amazonaws:aws-java-sdk-s3:1.11.1021'
+//	implementation 'org.jets3t:jets3t:0.9.4'
+	implementation group: 'org.jets3t', name: 'jets3t', version: '0.9.7'
+
+	//엑셀
+	implementation 'org.apache.poi:poi:5.2.1'
+	implementation 'org.apache.poi:poi-ooxml:5.2.1'
+
+	implementation 'org.springdoc:springdoc-openapi-ui:1.6.12'
+
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+
+
+	// https://mvnrepository.com/artifact/org.apache.axis/axis
+	implementation 'org.apache.axis:axis:1.4'
+
+	// https://mvnrepository.com/artifact/javax.xml.rpc/javax.xml.rpc-api
+	implementation 'javax.xml.rpc:javax.xml.rpc-api:1.1.2'
+
+	// https://mvnrepository.com/artifact/wsdl4j/wsdl4j
+	implementation 'wsdl4j:wsdl4j:1.6.2'
+
+	// https://mvnrepository.com/artifact/commons-discovery/commons-discovery
+	implementation 'commons-discovery:commons-discovery:0.5'
+
+	// https://mvnrepository.com/artifact/javax.xml.soap/javax.xml.soap-api
+	implementation 'javax.xml.soap:javax.xml.soap-api:1.4.0'
+
+	implementation files("lib/jdk1.6[20230901].zip")
+
+}
+
+bootRun {
+	jvmArgs = ['-Djava.net.preferIPv4Stack=true']
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

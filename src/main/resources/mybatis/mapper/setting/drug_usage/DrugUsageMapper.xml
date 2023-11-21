@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.setting.drug_usage.DrugUsageMapper">
+
+    <select id="drugUsageList" parameterType="yezak.api.api.setting.drug_usage.dto.DrugUsageListReq" resultType="yezak.api.api.setting.drug_usage.dto.DrugUsageListRes">
+        <!-- 용법관리 리스트 -->
+        select dut.id as drugUsageTypeId
+             , dut.name
+             , du.id as usageId
+             , du.custom_code
+             , du.content
+          from drug_usages as du
+     left join drug_usage_types as dut
+            on du.drug_usage_type_id = dut.id
+        <where>
+            <if test="drugUsageTypeId != null and drugUsageTypeId != ''">
+                and du.drug_usage_type_id = #{drugUsageTypeId}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and du.custom_code like concat('%', #{searchValue}, '%')
+                 or du.content like concat('%', #{searchValue}, '%')
+            </if>
+            and du.hospital_id = #{hospitalId}
+        </where>
+        limit #{offset}, #{pageSize}
+    </select>
+    <select id="selectUsageType" resultType="Map">
+        select id as value
+             , name as text
+          from drug_usage_types
+    </select>
+    <select id="countDrugUsage" parameterType="yezak.api.api.setting.drug_usage.dto.DrugUsageListReq" resultType="int">
+        select count(*)
+          from drug_usages as du
+     left join drug_usage_types as dut
+            on du.drug_usage_type_id = dut.id
+        <where>
+            <if test="drugUsageTypeId != null and drugUsageTypeId != ''">
+                and du.drug_usage_type_id = #{drugUsageTypeId}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and du.custom_code like concat('%', #{searchValue}, '%')
+                or du.content like concat('%', #{searchValue}, '%')
+            </if>
+            and du.hospital_id = #{hospitalId}
+        </where>
+    </select>
+
+    <update id="updateUsage" parameterType="yezak.api.api.setting.drug_usage.dto.UpdateDrugUsageReq">
+        <!-- 용법관리 수정 -->
+        update drug_usages
+           set custom_code = #{customCode}
+             , drug_usage_type_id = #{drugUsageTypeId}
+             , content = #{content}
+         where id = #{id}
+    </update>
+
+    <insert id="insertUsage" parameterType="yezak.api.api.setting.drug_usage.dto.InsertDrugUsageReq">
+        <!-- 용법관리 insert -->
+        insert into drug_usages
+        (
+            custom_code
+          , drug_usage_type_id
+          , content
+          , hospital_id
+        )
+        values
+        (
+            #{customCode}
+          , #{drugUsageTypeId}
+          , #{content}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <select id="findByCustomCode" parameterType="yezak.api.api.setting.drug_usage.dto.FindByCustomCode" resultType="Long">
+        select id
+          from drug_usages
+         where custom_code = #{customCode}
+           and hospital_id = #{hospitalId}
+    </select>
+
+
+
+</mapper>

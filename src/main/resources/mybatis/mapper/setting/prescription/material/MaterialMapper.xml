@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.setting.prescription.material.MaterialMapper">
+
+    <select id="MaterialList" resultType="yezak.api.api.setting.prescription.material.dto.MaterialListRes" parameterType="yezak.api.api.setting.prescription.material.dto.MaterialListReq">
+        <!-- 재료대 리스트 조회 -->
+        select m.id
+             , mc.code
+             , mo.custom_code
+             , m.name
+             , m.specification
+             , m.unit
+             , m.ceiling_amount as max_value
+             , m.manufacturer
+             , m.material
+             , m.importer
+             , mc.hospital_id
+             , m.ceiling_amount
+             , mo.uninsured_price
+             , (case
+                when mc.hospital_id = 0 then '라이브러리'
+                else '자체 등록'
+               end) as registrant
+          from materials as m
+     left join material_codes as mc
+            on m.material_code_id = mc.id
+     left join material_options as mo
+            on mo.material_code_id = mc.id
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and mc.code like concat('%', #{searchValue}, '%')
+                 or m.name like concat('%', #{searchValue}, '%')
+            </if>
+            and m.deleted_at is null
+            and mo.deleted_at is null
+            and (mo.hospital_id is null or mo.hospital_id = #{hospitalId})
+            and (mc.hospital_id = #{hospitalId} or mc.hospital_id = 0)
+        </where>
+        order by mc.code asc
+        limit #{offset}, #{pageSize}
+
+    </select>
+    <select id="countMaterial" parameterType="yezak.api.api.setting.prescription.material.dto.MaterialListReq" resultType="int">
+        select count(*)
+          from materials as m
+     left join material_codes as mc
+            on m.material_code_id = mc.id
+     left join material_options as mo
+            on mo.material_code_id = mc.id
+        <where>
+            <if test="hospitalId != null and hospitalId != ''">
+                and (mc.hospital_id = #{hospitalId}
+                or mc.hospital_id = 0)
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and mc.code like concat('%', #{searchValue}, '%')
+                or m.name like concat('%', #{searchValue}, '%')
+            </if>
+            and m.deleted_at is null
+            and mo.deleted_at is null
+            and (mo.hospital_id is null or mo.hospital_id = #{hospitalId})
+            and (mc.hospital_id = #{hospitalId} or mc.hospital_id = 0)
+        </where>
+    </select>
+
+    <update id="deleteMaterial" parameterType="Long">
+        <!-- 삭제를 업데이트 처리 -->
+        update materials as m
+     left join material_codes as mc
+            on m.material_code_id = mc.id
+     left join material_options as mo
+            on mo.material_code_id = mc.id
+           set m.deleted_at = now()
+             , mo.deleted_at = now()
+         where m.id = #{id}
+           and mc.hospital_id = #{hospitalId}
+    </update>
+    <update id="deleteMaterialCode" parameterType="Long">
+        update material_codes
+           set deleted_at = now()
+         where id = #{id}
+           and hospital_id = #{hospitalId}
+    </update>
+
+    <select id="materialDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.material.dto.SystemMaterialDetailRes">
+        <!-- 데이터 개별 조회 -->
+        select m.id
+             , mc.hospital_id
+             , m.material_code_id
+             , mc.code
+             , mo.custom_code
+             , m.name
+             , m.specification
+             , m.unit
+             , m.ceiling_amount as max_value
+             , m.applicated_date
+             , mo.uninsured_price
+             , m.manufacturer
+             , m.material
+             , m.importer
+          from materials as m
+     left join material_codes as mc
+            on m.material_code_id = mc.id
+     left join material_options as mo
+            on mc.id = mo.material_code_id
+         where m.id = #{id}
+           and m.deleted_at is null
+           and mo.deleted_at is null
+
+    </select>
+
+    <select id="dateChangeLog" parameterType="Long" resultType="String">
+        <!-- 날짜변경내역 -->
+        select m.applicated_date
+          from material_codes as mc
+     left join materials as m
+            on mc.id = m.material_code_id
+         where mc.id = #{id}
+      order by m.id desc
+         limit 3
+    </select>
+
+    <select id="materialPriceLog" parameterType="Long" resultType="java.lang.Integer">
+        <!-- 금액변경내역 -->
+        select ceiling_amount
+          from materials as m
+         where material_code_id = #{codeId}
+      order by m.id DESC
+         limit 3
+    </select>
+    <select id="optionPriceLog" parameterType="Long" resultType="java.lang.Integer">
+        <!-- 금액변경내역 -->
+        SELECT uninsured_price
+          from material_options mo
+         where material_code_id = #{codeId}
+      order by mo.id DESC
+         limit 3
+    </select>
+
+    <select id="findByCustomCode" parameterType="yezak.api.api.setting.prescription.material.dto.FindByCustomCode" resultType="String">
+        select custom_code
+          from material_options
+         where custom_code = #{customCode}
+           and hospital_id = #{hospitalId}
+           and deleted_at is null
+    </select>
+
+    <select id="findCode" parameterType="yezak.api.api.setting.prescription.material.dto.FindCode" resultType="Long">
+        select id
+          from material_codes
+         where code = #{code}
+           and deleted_at is null
+           and (hospital_id = 0 or hospital_id = #{hospitalId})
+    </select>
+
+    <insert id="insertMaterialOption" parameterType="yezak.api.api.setting.prescription.material.dto.InsertMaterial">
+        insert into material_options
+        (
+            custom_code
+          , uninsured_price
+          , material_code_id
+          , hospital_id
+        )
+        values
+        (
+            #{customCode}
+          , #{uninsuredPrice}
+          , #{materialCodeId}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <insert id="insertMaterial" parameterType="yezak.api.api.setting.prescription.material.dto.InsertMaterial">
+        insert into materials
+        (
+            name
+          , specification
+          , unit
+          , manufacturer
+          , material
+          , importer
+          , applicated_date
+          , material_code_id
+        )
+        values
+        (
+            #{name}
+          , #{specification}
+          , #{unit}
+          , #{manufacturer}
+          , #{material}
+          , #{importer}
+          , #{applicatedDate}
+          , #{materialCodeId}
+        )
+    </insert>
+    <insert id="increaseId" parameterType="yezak.api.api.setting.prescription.material.dto.IncreaseIdReq" useGeneratedKeys="true" keyProperty="id">
+        insert into material_codes
+        (
+            id
+          , hospital_id
+          , code
+        )
+        values
+        (
+            #{id}
+          , #{hospitalId}
+          , #{code}
+        )
+    </insert>
+
+    <insert id="updateMaterialOption" parameterType="yezak.api.api.setting.prescription.material.dto.UpdateMaterial">
+        insert into material_options
+        (
+          custom_code
+        , uninsured_price
+        , material_code_id
+        , hospital_id
+        )
+        values
+        (
+          #{customCode}
+        , #{uninsuredPrice}
+        , #{materialCodeId}
+        , #{hospitalId}
+        )
+    </insert>
+
+    <select id="findMaterial" parameterType="Long" resultType="yezak.api.api.setting.prescription.material.dto.FindMaterial">
+        select *
+          from materials m
+         where m.id = #{id}
+    </select>
+
+    <insert id="updateMaterial" parameterType="yezak.api.api.setting.prescription.material.dto.UpdateMaterial">
+        insert into materials
+        (
+          name
+        , specification
+        , unit
+        , manufacturer
+        , material
+        , importer
+        , applicated_date
+        , material_code_id
+        )
+        values
+        (
+          #{name}
+        , #{specification}
+        , #{unit}
+        , #{manufacturer}
+        , #{material}
+        , #{importer}
+        , #{applicatedDate}
+        , #{materialCodeId}
+        )
+    </insert>
+
+    <update id="deleteOld" parameterType="Long">
+        <!-- update 후 예전 id delete 처리 -->
+        update materials as m
+     left join material_codes as mc
+            on m.material_code_id = mc.id
+     left join material_options as mo
+            on mo.material_code_id = mc.id
+           set m.deleted_at = now()
+             , mo.deleted_at = now()
+         where mc.id = #{id}
+    </update>
+
+    <select id="findMaterialCodeIdById" parameterType="Long" resultType="Long">
+        <!-- 리스트의 id로 codeId 찾기 -->
+        select material_code_id
+          from materials as m
+     left join material_codes as mc
+            on mc.id = m.material_code_id
+         where m.id = #{id}
+           and m.deleted_at is null
+    </select>
+
+    <select id="findHospitalId" parameterType="Long" resultType="Long">
+        select mc.hospital_id
+          from material_codes as mc
+     left join materials as m
+            on m.material_code_id = mc.id
+         where m.id = #{id}
+    </select>
+
+
+
+
+</mapper>

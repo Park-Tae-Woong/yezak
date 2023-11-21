@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.inventory.InventoryMapper">
+
+    <select id="getInventoryList" parameterType="yezak.api.api.management_support.inventory.dto.InventoryListReq" resultType="yezak.api.api.management_support.inventory.dto.InventoryListRes">
+        <!-- 재고 리스트 -->
+        select i.id                                     <!-- 재고 id -->
+             , m.id as material_id                      <!-- 재료대 id -->
+             , mc.code                                  <!-- 재료코드 -->
+             , m.name                                   <!-- 품명 -->
+             , m.specification                          <!-- 규격 -->
+             , m.unit                                   <!-- 단위 -->
+             , m.manufacturer                           <!-- 제조사 -->
+             , m.material                               <!-- 재질 -->
+             , m.importer                               <!-- 수입업소 -->
+             , i.amount                                 <!-- 현 재고 수량 -->
+          from materials as m
+     left join hospital_inventories as i
+            on i.material_id = m.id
+           and i.hospital_id = #{hospitalId}
+     left join material_codes as mc
+            on mc.id = m.material_code_id
+           and mc.hospital_id = 0
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and (mc.code like concat('%', #{searchValue}, '%')
+                 or m.name like concat('%', #{searchValue}, '%'))
+            </if>
+        </where>
+      order by isnull(i.amount) asc, i.amount ${sortType}
+         limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countInventory" parameterType="yezak.api.api.management_support.inventory.dto.InventoryListReq" resultType="int">
+        <!-- 재고 리스트 페이징 -->
+        select count(*)
+          from materials as m
+     left join hospital_inventories as i
+            on i.material_id = m.id
+     left join material_codes as mc
+            on mc.id = m.material_code_id
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and (mc.code like concat('%', #{searchValue}, '%')
+                 or m.name like concat('%', #{searchValue}, '%'))
+            </if>
+            and i.hospital_id = #{hospitalId}
+            or mc.hospital_id = 0
+        </where>
+        order by i.amount ${sortType}
+    </select>
+
+    <select id="getInventoryDetail" resultType="yezak.api.api.management_support.inventory.dto.InventoryDetailRes">
+        <!-- 재고 상세 -->
+        select i.id                                     <!-- 재고 id -->
+             , m.id as material_id                      <!-- 재료대 id -->
+             , mc.code                                  <!-- 재료코드 -->
+             , m.name                                   <!-- 품명 -->
+             , m.specification                          <!-- 규격 -->
+             , m.unit                                   <!-- 단위 -->
+             , m.manufacturer                           <!-- 제조사 -->
+             , m.material                               <!-- 재질 -->
+             , m.importer                               <!-- 수입업소 -->
+             , i.amount                                 <!-- 현 재고 수량 -->
+          from materials as m
+     left join hospital_inventories as i
+            on i.material_id = m.id
+     left join material_codes as mc
+            on mc.id = m.material_code_id
+         where mc.hospital_id = #{hospitalId}
+           and i.id = #{id}
+    </select>
+
+    <insert id="createInventoryLog" parameterType="yezak.api.api.management_support.inventory.dto.CreateInventoryLogReq">
+        <!-- 재고내역 생성 -->
+        insert into hospital_inventory_logs
+        (
+            controlled_at                                        <!-- 반영일자 -->
+          , control_type_id                                      <!-- 조정 구분 -->
+          , before_amount                                        <!-- 조정 전 갯수 -->
+          , controlled_amount                                    <!-- 조정 갯수 -->
+          , after_amount                                         <!-- 조정 후 갯수 -->
+          , remark                                               <!-- 비고 -->
+          , hospital_inventory_id                                <!-- 재고 id -->
+          , user_id                                              <!-- 유저 id -->
+        )
+        values
+        (
+            #{controlledAt}
+          , #{controlTypeId}
+          , #{beforeAmount}
+          , #{controlledAmount}
+          , #{afterAmount}
+          , #{remark}
+          , #{hospitalInventoryId}
+          , #{userId}
+        )
+    </insert>
+
+    <update id="plusAmount" parameterType="yezak.api.api.management_support.inventory.dto.UpdateAmountReq">
+        <!-- 수량 + -->
+        update hospital_inventories
+           set amount = amount + #{amount}
+         where id = #{id}
+    </update>
+    <update id="minusAmount" parameterType="yezak.api.api.management_support.inventory.dto.UpdateAmountReq">
+        <!-- 수량 - -->
+        update hospital_inventories
+           set amount = amount - #{amount}
+         where id = #{id}
+    </update>
+    <select id="findAmount" parameterType="Long" resultType="int">
+        <!-- 수량 -->
+        select amount
+          from hospital_inventories
+         where id = #{id}
+    </select>
+
+    <select id="getMaterialList" parameterType="yezak.api.api.management_support.inventory.dto.MaterialListReq" resultType="yezak.api.api.management_support.inventory.dto.MaterialListRes">
+        <!-- 재료대 리스트 -->
+        select m.id                                      <!-- 재료대 id -->
+             , mc.code                                   <!-- 재료대 code -->
+             , m.name                                    <!-- 품명 -->
+             , m.specification                           <!-- 규격 -->
+             , m.unit                                    <!-- 단위 -->
+             , m.manufacturer                            <!-- 제조사 -->
+             , m.material                                <!-- 재질 -->
+             , m.importer                                <!-- 수입업소 -->
+          from material_codes as mc
+     left join materials as m
+            on mc.id = m.material_code_id
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and (mc.code like concat('%', #{searchValue}, '%')
+                 or m.name like concat('%', #{searchValue}, '%'))
+            </if>
+            and (mc.hospital_id = #{hospitalId}
+             or mc.hospital_id = 0)
+        </where>
+        limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countMaterial" parameterType="yezak.api.api.management_support.inventory.dto.MaterialListReq" resultType="int">
+        <!-- 재료대 리스트 페이징 -->
+        select count(*)
+          from material_codes as mc
+     left join materials as m
+            on mc.id = m.material_code_id
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and (mc.code like concat('%', #{searchValue}, '%')
+                 or m.name like concat('%', #{searchValue}, '%'))
+            </if>
+            and (mc.hospital_id = #{hospitalId}
+             or mc.hospital_id = 0)
+        </where>
+    </select>
+
+    <insert id="useMaterial" parameterType="yezak.api.api.management_support.inventory.dto.UseMaterialReq">
+        <!-- 재고로 사용할 것 -->
+        insert into hospital_inventories
+        (
+            material_id
+          , hospital_id
+          , amount
+        )
+        values
+        (
+            #{materialId}
+          , #{hospitalId}
+          , 0
+        )
+    </insert>
+
+    <select id="inventoryLogList" parameterType="yezak.api.api.management_support.inventory.dto.InventoryLogListReq" resultType="yezak.api.api.management_support.inventory.dto.InventoryLogListRes">
+        select ct.name as category                              <!-- 구분 -->
+             , hil.controlled_at                                <!-- 반영일자 -->
+             , u.name as user_name                              <!-- 담당자 -->
+             , mc.code                                          <!-- 재료코드 -->
+             , m.name                                           <!-- 품명 -->
+             , m.specification                                  <!-- 규격 -->
+             , m.unit                                           <!-- 단위 -->
+             , m.manufacturer                                   <!-- 제조회사 -->
+             , m.material                                       <!-- 재질 -->
+             , m.importer                                       <!-- 수입업소 -->
+             , hil.before_amount                                <!-- 조정 전 수량 -->
+             , hil.after_amount                                 <!-- 조정 후 수량 -->
+             , remark                                           <!-- 비고 -->
+          from hospital_inventory_logs as hil
+     left join hospital_inventories as hi
+            on hi.id = hil.hospital_inventory_id
+     left join materials as m
+            on m.id = hi.material_id
+     left join material_codes as mc
+            on mc.id = m.material_code_id
+     left join users as u
+            on u.id = hil.user_id
+     left join control_types as ct
+            on ct.id = control_type_id
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and (mc.code like concat('%', #{searchValue}, '%')
+                 or m.name like concat('%', #{searchValue}, '%'))
+            </if>
+            <if test="start != null and start != '' and end != null and end != ''">
+                and hil.controlled_at between #{start} and date_add(#{end}, interval 1 day)
+            </if>
+            <if test="start == null or start == '' or end == null or end == ''">
+                and hil.created_at &gt;= date_sub(now(), interval 30 day)
+            </if>
+            <choose>
+                <when test="controlTypeId == 1">
+                    and hil.control_type_id = #{controlTypeId}
+                </when>
+                <when test="controlTypeId == 2">
+                    and hil.control_type_id = #{controlTypeId}
+                </when>
+                <otherwise>
+                </otherwise>
+            </choose>
+            and hi.hospital_id = #{hospitalId}
+        </where>
+     order by hil.controlled_at desc
+        limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="findHospitalId" parameterType="Long" resultType="Long">
+        select hospital_id
+          from hospital_inventories
+         where id = #{id}
+    </select>
+
+</mapper>

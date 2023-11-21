@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.admin.permission.account.AccountMapper">
+
+    <select id="getUsers" parameterType="Long" resultType="yezak.api.api.admin.permission.account.dto.UserManagementDto">
+        <!-- 계정관리 리스트 -->
+        select u.name as u_name
+             , r.ko_name
+             , g.name as g_name
+             , (
+                case
+<!--                    when u.is_locked = 1  then "1"                                  /* 비활성화 : 1 */-->
+                    when u.is_deleted = 1 then "2"                                  /* 삭제 : 2 */
+                    when u.is_stopped = 1 then "3"                                  /* 사용정지 : 3 */
+                    else "0"                                                        /* 활성화 : 0 */
+                end
+                ) as account_status
+             , u.id
+             , u.email
+          from users as u
+     left join roles as r
+            on u.role_id = r.id
+     left join grades as g
+            on r.grade_id = g.id
+         where u.hospital_id = #{hospitalId}
+           and u.is_deleted = 0
+    </select>
+
+    <select id="getRoleCategory" resultType="Map">
+        <!-- 직군 리스트 -->
+        select id as value
+             , ko_name as text
+          from role_categories
+         where id &lt;&gt; 12
+           and id &lt;&gt; 10
+    </select>
+    <select id="getRoles" parameterType="Long" resultType="Map">
+        <!-- 상세직군 리스트 -->
+        select id as value
+             , ko_name as text
+             , role_category_id
+          from roles
+         where hospital_id = #{hospitalId}
+           and role_category_id &lt;&gt; 12
+    </select>
+    <select id="selectSalaryType" resultType="Map">
+        <!-- 급여형태 리스트 -->
+        select id as value
+             , name as text
+          from salary_types
+    </select>
+    <select id="selectEmploymentStatus" resultType="Map">
+        <!-- 근로상태 리스트 -->
+        select id as value
+             , name as text
+          from employment_statuses
+    </select>
+    <select id="selectTreatmentSubject" resultType="Map">
+        <!-- 진료과목 리스트 -->
+        select id as value
+             , name as text
+          from treatment_subjects
+    </select>
+    <select id="selectEmploymentTypes" resultType="Map">
+        <!-- 고용형태 리스트 -->
+        select id as value
+             , name as text
+          from employment_types
+    </select>
+
+    <select id="getUserDetail" resultType="yezak.api.api.admin.permission.account.dto.UserManageDetailDto" parameterType="Long">
+        <!-- 계정관리 세부 -->
+        select u.id as userId
+             , u.name
+             , r.id as roleId
+             , r.ko_name
+             , u.email
+             , pi.sex
+             , pi.first_registration_number
+             , pi.second_registration_number
+             , pi.phone_number
+             , pi.sub_phone_number
+             , pi.address
+             , pi.address_detail
+             , st.id as salaryTypeId
+             , st.name as st_name
+             , si.start as salaryInfoStart
+             , si.end as salaryInfoEnd
+             , si.amount
+             , si.created_at
+             , (select amount from salary_informations where user_id = #{userId} order by id desc limit 1) as amount
+             , (select amount from salary_informations where user_id = #{userId} order by id desc limit 1 offset 1) as ago_amount
+             , ts.id as treatmentSubjectId
+             , ts.name as ts_name
+             , et.id as employmentTypeId
+             , et.name as et_name
+             , rc.id as roleCategoryId
+             , rc.ko_name as rc_ko_name
+             , ei.joined_at
+             , ei.internship_yn
+             , ei.internship_start
+             , ei.internship_end
+             , es.id as employmentStatusId
+             , es.name as es_name
+             , ei.rest_start
+             , ei.rest_end
+             , ei.pension_date
+             , ei.leaved_at
+             , ei.leave_reason
+          from users as u
+     left join personal_informations as pi
+            on u.id = pi.user_id
+     left join salary_informations as si
+            on u.id = si.user_id
+     left join roles as r
+            on u.role_id = r.id
+     left join salary_types as st
+            on si.salary_type_id = st.id
+     left join employment_informations as ei
+            on u.id = ei.user_id
+     left join employment_types as et
+            on ei.employment_type_id = et.id
+     left join role_categories as rc
+            on r.role_category_id = rc.id
+     left join employment_statuses as es
+            on ei.employment_status_id = es.id
+     left join treatment_subjects as ts
+            on ts.id = ei.treatment_subject_id
+         where u.id = #{userId}
+      order by si.id desc limit 1
+    </select>
+
+    <select id="getChangeAmount" parameterType="Long" resultType="yezak.api.api.user.dto.GetChangeAmount">
+        <!-- 기본급여 변동 내역 -->
+        select created_at
+             , amount
+          from salary_informations
+         where user_id = #{userId}
+      order by created_at desc
+    </select>
+
+    <select id="findById" parameterType="Long" resultType="yezak.api.domain.User">
+        select *
+          from users
+         where id = #{id}
+    </select>
+
+    <insert id="updateSalary" parameterType="yezak.api.api.admin.permission.account.dto.SalaryUpdateReq">
+        <!-- 급여 수정 (사실은 추가) -->
+        insert into salary_informations
+        (
+            salary_type_id
+          , start
+          , end
+          , amount
+          , user_id
+        )
+        values
+        (
+            #{salaryTypeId}
+          , #{start}
+          , #{end}
+          , #{amount}
+          , #{userId}
+        )
+    </insert>
+
+    <update id="updateEmplInfo" parameterType="yezak.api.api.admin.permission.account.dto.EmplInfoReq">
+        <!-- 근무정보 수정 -->
+        update users as u
+     left join employment_informations as ei
+            on u.id = ei.user_id
+     left join roles as r
+            on u.role_id = r.id
+           set ei.employment_type_id = #{employmentTypeId}
+             , ei.treatment_subject_id = #{treatmentSubjectId}
+             , u.role_id = #{roleId}
+             , r.role_category_id = #{roleCategoryId}
+             , ei.joined_at = #{joinedAt}
+             , ei.internship_yn = #{internshipYn}
+             , ei.internship_start = #{internshipStart}
+             , ei.internship_end = #{internshipEnd}
+             , ei.employment_status_id = #{employmentStatusId}
+             , ei.rest_start = #{restStart}
+             , ei.rest_end = #{restEnd}
+             , ei.pension_date = #{pensionDate}
+             , ei.leaved_at = #{leavedAt}
+             , ei.leave_reason = #{leaveReason}
+         where u.id = #{id}
+    </update>
+
+    <update id="updateEmplStatusSchedule">
+        <!-- 휴직종료일 도래시 재직으로 변경 스케줄링 -->
+        update employment_informations
+           set employment_status_id = 1
+         where rest_end = curdate()
+    </update>
+
+    <update id="updateUserStatusStopSchedule">
+        <!-- 퇴직일 도래시 사용정지로 변경 스케줄링 -->
+        update users as u
+     left join employment_informations as ei
+            on ei.user_id = u.id
+           set u.is_stopped = 1
+         where ei.leaved_at = now()
+    </update>
+
+    <update id="updateStatusAble" parameterType="Long">
+        update users
+           set failed_count = 0
+             , is_deleted = 0
+             , is_locked = 0
+             , is_stopped = 0
+         where id = #{id}
+    </update>
+    <update id="updateStatusDelete" parameterType="Long">
+        update users as u
+           set u.is_deleted = 1
+         where id = #{id}
+    </update>
+    <update id="updateStatusStop" parameterType="Long">
+        update users
+           set is_stopped = 1
+         where id = #{id}
+    </update>
+
+    <insert id="userDeleteLog" parameterType="yezak.api.api.admin.audit_record.login_log.dto.LoginLogReq">
+        <!-- 계정 삭제 로그 삽입 -->
+        insert into user_logs
+        (
+            hospital_id
+          , ip
+          , message
+          , act_user_id
+          , affected_user_id
+        )
+        values
+        (
+            #{hospitalId}
+          , #{ip}
+          , #{message}
+          , #{actUserId}
+          , #{affectedUserId}
+        )
+    </insert>
+
+    <select id="findRoleCategoryId" parameterType="Long" resultType="Long">
+        select rc.id as rc
+          from role_categories
+     left join roles as r
+            on r.role_category_id = rc.id
+     left join users as u
+            on u.role_id = r.id
+         where u.id = #{userId}
+    </select>
+
+
+</mapper>

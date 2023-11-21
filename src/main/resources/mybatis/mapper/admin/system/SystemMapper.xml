@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.admin.system.SystemMapper">
+
+    <insert id="saveFileInfo" parameterType="yezak.api.api.admin.system.dto.BackgroundAttachmentDto">
+        <!--파일 정보 db 업로드 -->
+        insert into background_attachments
+        (
+            hospital_id
+          , file_name
+          , file_path
+          , file_extension
+          , file_size
+          , created_at
+        )
+        values
+        (
+            #{hospitalId}
+          , #{fileName}
+          , #{filePath}
+          , #{fileExtension}
+          , #{fileSize}
+          , curdate()
+        )
+    </insert>
+
+    <insert id="insertCustom" parameterType="yezak.api.api.admin.system.dto.InsertCustomDepthOne">
+        <!-- 메뉴명 커스텀 -->
+        insert into depth1_navigation_hospital
+        (
+            depth1_navigation_id
+          , hospital_id
+          , ko_name
+        )
+        values
+        (
+            #{depth1NavigationId}
+          , #{hospitalId}
+          , #{koName}
+        )
+    </insert>
+    <update id="customDepth1" parameterType="yezak.api.api.admin.system.dto.SystemDto">
+        <!-- 메뉴명 커스텀 -->
+        update depth1_navigation_hospital
+           set ko_name = #{koName}
+         where id = #{id}
+    </update>
+    <select id= "findByDepthOne" parameterType="Long" resultType="Long">
+        <!-- 메뉴명 수정을 위한 id 있는지 확인용 -->
+        select id
+          from depth1_navigation_hospital
+         where hospital_id = #{hospitalId}
+           and depth1_navigation_id = #{id}
+    </select>
+
+    <select id= "findByDepth1" parameterType="Long" resultType="Long">
+        <!-- id 있는지 확인용 -->
+        select depth1_navigation_id
+          from depth1_navigation_hospital
+         where depth1_navigation_id = #{depth1NavigationId}
+           and hospital_id = #{hospitalId}
+    </select>
+    <select id="getNaviList" resultType="yezak.api.api.admin.system.dto.SystemMenuInfoResponse">
+        <!-- 커스텀 메뉴 기본 조회 -->
+        select id
+             , ko_name
+          from depth1_navigations
+      ORDER BY id ASC
+
+    </select>
+    <select id="getNaviOneDepthId" resultType="String">
+        <!-- 커스텀 메뉴 조회 -->
+        SELECT ko_name
+          FROM depth1_navigation_hospital
+         WHERE hospital_id = #{hospitalId}
+           and depth1_navigation_id = #{depth1NavigationId}
+    </select>
+    <select id="checkOriginName" parameterType="Long" resultType="String">
+        <!-- 이름 같은 지 조회 -->
+        select ko_name
+          from depth1_navigations
+         where id = #{id}
+    </select>
+    <delete id="deleteDepth1Pivot" parameterType="Long">
+        delete from depth1_navigation_hospital
+         where id = #{id}
+    </delete>
+
+    <select id="checkBackgroundState" resultType="java.lang.Integer">
+        SELECT
+            IF(use_custom_wallpaper_yn IS NULL, 0, use_custom_wallpaper_yn) AS use_custom_wallpaper_yn
+        FROM hospitals
+        WHERE id = #{hospitalId}
+    </select>
+
+    <select id="getBackgroundInfo" resultType="java.util.Map">
+        SELECT
+            file_name AS fileName,
+            file_path AS filePath
+        FROM background_attachments
+        WHERE hospital_id = #{hospitalId}
+        ORDER BY id DESC
+        limit 1
+    </select>
+
+    <update id="modifyBackgroundState">
+        UPDATE hospitals SET
+            use_custom_wallpaper_yn = #{customWallpaperState}
+        WHERE id = #{hospitalId}
+    </update>
+
+</mapper>

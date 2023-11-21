@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.sample.mapper.SampleMapper">
+
+	<select id="findSampleTotalCount" resultType="Int">
+		/* findSampleTotalCount */
+		SELECT
+			COUNT(idx) AS TOTALCOUNT
+		FROM
+			sample
+	</select>
+
+	<select id="findSample" resultType="yezak.api.sample.domain.Sample">
+		/* findSample */
+		SELECT
+		    	IDX
+				, TITLE
+				, CONTENTS
+			FROM
+			    SAMPLE
+	</select>
+	<select id="findByIdSample" parameterType="integer" resultType="yezak.api.sample.domain.Sample">
+		/* findByIdSample */
+		SELECT
+			IDX
+			 , TITLE
+			 , CONTENTS
+		FROM
+			SAMPLE
+		WHERE
+			IDX = #{idx}
+	</select>
+
+	<insert id="inputSample" parameterType="yezak.api.sample.domain.Sample">
+		/* inputSample */
+		INSERT
+		INTO
+			SAMPLE
+			(TITLE, CONTENTS)
+		VALUES
+			(#{title}, #{contents})
+	</insert>
+
+	<update id="modifySample" parameterType="yezak.api.sample.domain.Sample">
+		/* modifySample */
+		UPDATE
+			SAMPLE
+		SET
+			TITLE = #{title}
+		  , CONTENTS = #{contents}
+		WHERE
+			IDX = #{idx}
+	</update>
+
+	<delete id="deleteSample" parameterType="Integer">
+		/* deleteSample */
+		DELETE
+		FROM
+			SAMPLE
+		WHERE
+			IDX = #{idx}
+	</delete>
+
+</mapper>

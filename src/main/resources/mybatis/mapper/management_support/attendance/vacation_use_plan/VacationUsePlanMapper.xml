@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.attendance.vacation_use_plan.VacationUsePlanMapper">
+
+    <select id="checkVacationPlan" parameterType="yezak.api.api.management_support.attendance.vacation_use_plan.dto.LeavePlanCheckReq" resultType="yezak.api.api.management_support.attendance.vacation_use_plan.dto.LeavePlanCheckRes">
+        <!-- 연차사용계획확인 -->
+        select u.name
+             , concat(vup.year, '년 ', vup.quarter, '분기') as quarter
+             , concat((vupd.end - vupd.start) + 1, '일') as days
+          from vacation_use_plans as vup
+     left join users as u
+            on u.id = vup.user_id
+     left join vacation_use_plan_details as vupd
+            on vupd.vacation_use_plan_id = vup.id
+        <where>
+            <if test="searchValue != null and searchValue !=''">
+                and u.name like concat('%', #{searchValue}, '%')
+            </if>
+            <if test="quarter != null and quarter != ''">
+                and vup.quarter = #{quarter}
+            </if>
+                and vup.year = #{year}
+                and u.hospital_id = #{hospitalId}
+        </where>
+      order by u.name asc
+             , vup.quarter asc
+         limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countVacationPlan" parameterType="yezak.api.api.management_support.attendance.vacation_use_plan.dto.LeavePlanCheckReq" resultType="int">
+        <!-- 연차사용계획확인 -->
+        select count(*)
+          from vacation_use_plans as vup
+     left join users as u
+            on u.id = vup.user_id
+     left join vacation_use_plan_details as vupd
+            on vupd.vacation_use_plan_id = vup.id
+        <where>
+            <if test="searchValue != null and searchValue !=''">
+                and u.name like concat('%', #{searchValue}, '%')
+            </if>
+            <if test="quarter != null and quarter != ''">
+                and vup.quarter = #{quarter}
+            </if>
+                and vup.year = #{year}
+                and u.hospital_id = #{hospitalId}
+        </where>
+      order by u.name asc
+             , vup.quarter asc
+    </select>
+
+    <select id="vacationPlanDetail" parameterType="yezak.api.api.management_support.attendance.vacation_use_plan.dto.LeavePlanDetailReq" resultType="yezak.api.api.management_support.attendance.vacation_use_plan.dto.LeavePlanDetailRes">
+        <!-- 연차사용계획 상세 -->
+        select concat(vup.year, '년 ', vup.quarter, '분기') as quarter
+             , concat((vupd.end - vupd.start) + 1, '일') as days
+             , concat(vupd.start, ' - ', vupd.end) as date
+             , u.name
+          from vacation_use_plans as vup
+     left join vacation_use_plan_details as vupd
+            on vup.id = vupd.vacation_use_plan_id
+     left join users as u
+            on u.id = vup.user_id
+         where vup.id = #{id}
+           and u.hospital_id = #{hospitalId}
+    </select>
+
+</mapper>

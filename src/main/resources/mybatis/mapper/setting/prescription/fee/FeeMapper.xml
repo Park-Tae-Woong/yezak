@@ -1,0 +1,807 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.setting.prescription.fee.FeeMapper">
+
+    <select id="getFeeList" parameterType="yezak.api.api.setting.prescription.fee.dto.FeeListReq" resultType="yezak.api.api.setting.prescription.fee.dto.FeeListRes">
+        <!-- 수가 리스트 -->
+        select p.id                                             /* 수가 id */
+             , ctc.id as category_id                            /* 분류 id */
+             , ctc.name as category_name                        /* 분류 */
+             , ct.id as subdivision_id                          /* 세부구분 id */
+             , ct.name as subdivision_name                      /* 세부구분 */
+             , po.custom_code                                   /* 사용자코드 */
+             , pc.code                                          /* 청구코드 */
+             , p.ko_name                                        /* 한글명 */
+             , p.en_name                                        /* 영문명 */
+             , p.clinic_price                                   /* 보험가 */
+             , po.uninsured_price                               /* 비급여가 */
+             , (case
+                    when pc.hospital_id = 0 then '라이브러리'
+                    else '자체 등록'
+                end) as inserted                                /* 등록 주체 */
+          from prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = pc.id
+     left join code_types as ct
+            on ct.id = pc.code_type_id
+     left join code_type_categories as ctc
+            on ctc.id = ct.code_type_category_id
+        <where>
+            <if test="categoryId != null and categoryId != ''">
+                and ctc.id = #{categoryId}
+            </if>
+            <if test="subdivisionId != null and subdivisionId != ''">
+                and ct.id = #{subdivisionId}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and (po.custom_code like concat('%', #{searchValue}, '%')
+                 or p.ko_name like concat('%', #{searchValue}, '%'))
+            </if>
+            and p.deleted_at is null
+            and po.deleted_at is null
+            and (pc.hospital_id = 0 or pc.hospital_id = #{hospitalId})
+            and (po.hospital_id is null or po.hospital_id = #{hospitalId})
+        </where>
+        order by p.ko_name asc
+        limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="getFeeCount" parameterType="yezak.api.api.setting.prescription.fee.dto.FeeListReq" resultType="int">
+        <!-- 수가 페이징 -->
+        select count(*)
+          from prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = pc.id
+     left join code_types as ct
+            on ct.id = pc.code_type_id
+     left join code_type_categories as ctc
+            on ctc.id = ct.code_type_category_id
+        <where>
+            <if test="categoryId != null and categoryId != ''">
+                and ctc.id = #{categoryId}
+            </if>
+            <if test="subdivisionId != null and subdivisionId != ''">
+                and ct.id = #{subdivisionId}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and (po.custom_code like concat('%', #{searchValue}, '%')
+                 or p.ko_name like concat('%', #{searchValue}, '%'))
+            </if>
+            and p.deleted_at is null
+            and po.deleted_at is null
+            and (pc.hospital_id = 0 or pc.hospital_id = #{hospitalId})
+            and (po.hospital_id is null or po.hospital_id = #{hospitalId})
+        </where>
+    </select>
+
+    <select id="selectSubdivisionList" parameterType="Long" resultType="Map">
+        <!-- 세부구분 리스트 -->
+        select id as value
+             , name as text
+          from code_types
+         where code_type_category_id = #{codeTypeCategoryId}
+    </select>
+    <select id="selectCategoryList" resultType="Map">
+        <!-- 분류 리스트 -->
+        select id as value
+             , name as text
+          from code_type_categories
+    </select>
+
+    <select id="getFeeDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.fee.dto.FeeDetailRes">
+        <!-- 라이브러리일때 -->
+        select po.custom_code                                   /* 사용자코드 */
+             , ctc.id as category_id                            /* 분류 id */
+             , ctc.name as category_name                        /* 분류 */
+             , ct.id as subdivision_id                          /* 세부구분id */
+             , ct.name as subdivision_name                      /* 세부구분 */
+             , pc.code                                          /* 청구코드 */
+             , p.ko_name                                        /* 한글명 */
+             , p.en_name                                        /* 영문명 */
+             , p.clinic_price                                   /* 보험가 */
+             , group_concat(ptp.pay_type_id) as pay_type_id     /* 본인부담률 id */
+             , group_concat(pt.name) as pay_type_name           /* 본인부담률 */
+             , p.applicated_date                                /* 적용일 */
+             , pc.hospital_id                                   /* 등록주체 */
+          from prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+           and p.deleted_at is null
+     left join prescription_options as po
+            on po.prescription_code_id = pc.id
+           and po.deleted_at is null
+     left join code_types as ct
+            on ct.id = pc.code_type_id
+     left join code_type_categories as ctc
+            on ctc.id = ct.code_type_category_id
+     left join pay_type_prescription as ptp
+            on ptp.prescription_id = p.prescription_code_id
+     left join pay_types as pt
+            on pt.id = ptp.pay_type_id
+         where p.id = #{id}
+    </select>
+    
+    <select id="applicatedChangeLog" parameterType="Long" resultType="Map">
+        <!-- 라이브러리용 변경 내역 -->
+        select applicated_date
+             , clinic_price
+          from prescriptions
+         where prescription_code_id = #{id}
+      order by applicated_date desc
+         limit 3
+    </select>
+
+    <select id="getCustomFeeDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.fee.dto.CustomFeeDetailRes">
+        <!-- 자체등록 일때 -->
+        select po.custom_code                                   /* 사용자코드 */
+             , pc.hospital_id                                   /* 등록주체 */
+             , ctc.id as category_id                            /* 분류 id */
+             , ctc.name as category_name                        /* 분류 */
+             , ct.id as subdivision_id                          /* 세부구분id */
+             , ct.name as subdivision_name                      /* 세부구분 */
+             , p.ko_name                                        /* 한글명 */
+             , p.en_name                                        /* 영문명 */
+             , po.uninsured_price                               /* 비급여금액 */
+             , p.applicated_date                                /* 적용일 */
+          from prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = pc.id
+           and po.deleted_at is null
+     left join code_types as ct
+            on ct.id = pc.code_type_id
+     left join code_type_categories as ctc
+            on ctc.id = ct.code_type_category_id
+         where p.id = #{id}
+           and p.deleted_at is null
+    </select>
+
+<!--    <select id="customApplicatedChangeLog" parameterType="Long" resultType="Map">-->
+<!--        &lt;!&ndash; 커스텀용 변경 내역 &ndash;&gt;-->
+<!--        select p.applicated_date-->
+<!--             , po.uninsured_price-->
+<!--          from prescriptions as p-->
+<!--     left join prescription_codes as pc-->
+<!--            on pc.id = p.prescription_code_id-->
+<!--     left join prescription_options as po-->
+<!--            on po.prescription_code_id = pc.id-->
+<!--         where pc.id = #{id}-->
+<!--      order by p.id desc-->
+<!--         limit 3-->
+<!--    </select>-->
+
+    <select id="customApplicatedDateLog" parameterType="Long" resultType="String">
+        <!-- 변경내역 적용일 -->
+        select p.applicated_date
+          from prescription_codes as pc
+     left join prescriptions as p
+            on pc.id = p.prescription_code_id
+         where pc.id = #{codeId}
+      order by p.id desc
+         limit 3
+    </select>
+    <select id="customPriceLog" parameterType="Long" resultType="java.lang.Integer">
+        <!-- 변경내역 금액 -->
+        select po.uninsured_price
+          from prescription_codes as pc
+     left join prescription_options as po
+            on pc.id = po.prescription_code_id
+         where pc.id = #{codeId}
+      order by po.id desc
+         limit 3
+    </select>
+
+    <select id="getHospitalId" parameterType="Long" resultType="Long">
+        <!-- 등록 주체 확인용 -->
+        select pc.hospital_id
+          from prescription_codes as pc
+     left join prescriptions as p
+            on p.prescription_code_id = pc.id
+         where p.id = #{id}
+    </select>
+
+    <select id="getInspectionFeeDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.fee.dto.InspectionFeeDetailRes">
+        <!-- 검사료 라이브러리일때 -->
+        select po.custom_code                                   /* 사용자코드 */
+             , pc.hospital_id                                   /* 등록주체 */
+             , ctc.id as category_id                            /* 분류 id */
+             , ctc.name as category_name                        /* 분류 */
+             , ct.id as subdivision_id                          /* 세부구분id */
+             , ct.name as subdivision_name                      /* 세부구분 */
+             , pc.code                                          /* 청구코드 */
+             , p.ko_name                                        /* 한글명 */
+             , p.en_name                                        /* 영문명 */
+             , p.clinic_price                                   /* 보험가 */
+             , group_concat(ptp.pay_type_id) as pay_type_id     /* 본인부담률 id */
+             , group_concat(pt.name) as pay_type_name           /* 본인부담률 */
+             , p.applicated_date                                /* 적용일 */
+             , po.specimen_id                                   /* 검체 */
+             , po.examination_type                              /* 검사 구분 */
+             , po.consignment_id                                /* 수탁기관 id */
+          from prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = p.id
+           and po.deleted_at is null
+     left join code_types as ct
+            on ct.id = pc.code_type_id
+     left join code_type_categories as ctc
+            on ctc.id = ct.code_type_category_id
+     left join pay_type_prescription as ptp
+            on ptp.prescription_id = p.prescription_code_id
+     left join pay_types as pt
+            on pt.id = ptp.pay_type_id
+         where p.id = #{id}
+           and p.deleted_at is null
+    </select>
+    
+    <select id="normalStandard" parameterType="Long" resultType="yezak.api.api.setting.prescription.fee.dto.NormalStandardRes">
+        <!-- 기준 정상치 -->
+        select po.adult_male_minimum                                /* 남성 최소 */
+             , po.adult_male_maximum                                /* 남성 최대 */
+             , po.adult_female_minimum                              /* 여성 최소 */
+             , po.adult_female_maximum                              /* 여성 최대 */
+             , po.child_minimum                                     /* 유아 최소 */
+             , po.child_maximum                                     /* 유아 최대 */
+             , po.unit                                              /* 단위 */
+          from prescription_options as po
+     left join prescription_codes as pc
+            on po.prescription_code_id = pc.id
+     left join prescriptions as p
+            on p.prescription_code_id = pc.id
+           and p.deleted_at is null
+         where p.id = #{id}
+           and po.deleted_at is null
+    </select>
+
+    <select id="selectPayTypeList" resultType="Map">
+        <!-- 본인부담률 리스트 -->
+        select id as value
+        , name as text
+        from pay_types
+    </select>
+    <select id="selectSpecimen" resultType="Map">
+        <!-- 검체 리스트 -->
+        select id as value
+             , name as text
+          from specimens
+    </select>
+    <select id="selectExaminationType" resultType="Map">
+        <!-- 소견 수치 여부 -->
+        select id as value
+             , name as text
+          from examination_types
+    </select>
+    <select id="selectConsignment" resultType="Map">
+        <!-- 수탁기관 -->
+        select id as value
+             , ko_name as text
+          from consignments
+    </select>
+
+    <select id="findCodeTypeCategoryId" parameterType="Long" resultType="Long">
+        <!-- 분류 구분 -->
+        select ct.code_type_category_id
+          from code_types as ct
+     left join prescription_codes as pc
+            on pc.code_type_id = ct.id
+     left join prescriptions as p
+            on p.prescription_code_id = pc.id
+         where p.id = #{id}
+    </select>
+
+    <select id="getInspectionCustomFeeDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.fee.dto.InspectionCustomFeeDetailRes">
+        <!-- 검사료 자체등록일때 -->
+        select po.custom_code                                   /* 사용자코드 */
+             , pc.hospital_id                                   /* 등록주체 */
+             , ctc.id as category_id                            /* 분류 id */
+             , ctc.name as category_name                        /* 분류 */
+             , ct.name as subdivision_name                      /* 세부구분 */
+             , p.ko_name                                        /* 한글명 */
+             , p.en_name                                        /* 영문명 */
+             , po.uninsured_price                               /* 비금여 금액 */
+             , p.applicated_date                                /* 적용일 */
+             , po.specimen_id                                   /* 검체 */
+             , po.examination_type                              /* 검사 구분 */
+             , po.consignment_id                                /* 수탁기관 id */
+          from prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = p.id
+           and po.deleted_at is null
+     left join code_types as ct
+            on ct.id = pc.code_type_id
+     left join code_type_categories as ctc
+            on ctc.id = ct.code_type_category_id
+         where p.id = #{id}
+           and p.deleted_at is null
+    </select>
+
+    <select id="getSurgeryFeeDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.fee.dto.SurgeryFeeDetailRes">
+        <!-- 처치 수술 라이브러리일때 -->
+        select po.custom_code                                   /* 사용자코드 */
+             , pc.hospital_id                                   /* 등록주체 */
+             , ctc.id as category_id                            /* 분류 id */
+             , ctc.name as category_name                        /* 분류 */
+             , ct.name as subdivision_name                      /* 세부구분 */
+             , pc.code                                          /* 청구코드 */
+             , p.ko_name                                        /* 한글명 */
+             , p.en_name                                        /* 영문명 */
+             , p.clinic_price                                   /* 보험가 */
+             , group_concat(ptp.pay_type_id) as pay_type_id     /* 본인부담률 id */
+             , group_concat(pt.name) as pay_type_name           /* 본인부담률 */
+             , p.applicated_date                                /* 적용일 */
+             , po.estimated_time                                /* 예상소요시간 */
+             , po.is_product                                    /* 상품 여부 */
+          from prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = p.id
+     left join code_types as ct
+            on ct.id = pc.code_type_id
+     left join code_type_categories as ctc
+            on ctc.id = ct.code_type_category_id
+     left join pay_type_prescription as ptp
+            on ptp.prescription_id = p.prescription_code_id
+     left join pay_types as pt
+            on pt.id = ptp.pay_type_id
+         where p.id = #{id}
+    </select>
+
+    <select id="getSurgeryCustomFeeDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.fee.dto.SurgeryCustomFeeDetailRes">
+        <!-- 처치 수술 자체등록일때 -->
+        select po.custom_code                                   /* 사용자코드 */
+             , pc.hospital_id                                   /* 등록주체 */
+             , ctc.id as category_id                            /* 분류 id */
+             , ctc.name as category_name                        /* 분류 */
+             , ct.name as subdivision_name                      /* 세부구분 */
+             , p.ko_name                                        /* 한글명 */
+             , p.en_name                                        /* 영문명 */
+             , po.uninsured_price                               /* 비금여 금액 */
+             , p.applicated_date                                /* 적용일 */
+             , po.estimated_time                                /* 예상소요시간 */
+             , po.is_product                                    /* 상품 여부 */
+          from prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = p.id
+     left join code_types as ct
+            on ct.id = pc.code_type_id
+     left join code_type_categories as ctc
+            on ctc.id = ct.code_type_category_id
+         where p.id = #{id}
+    </select>
+
+    <insert id="insertPc" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertFeeReq" useGeneratedKeys="true" keyProperty="id">
+        <!-- 수가 등록 -->
+        insert into prescription_codes
+        (
+            code_type_id
+          , hospital_id
+        )
+        values
+        (
+            #{subdivisionId}
+          , #{hospitalId}
+        )
+    </insert>
+    <insert id="insertP" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertFeeReq">
+        <!-- 수가 등록 -->
+        insert into prescriptions
+        (
+            prescription_code_id
+          , ko_name
+          , en_name
+          , applicated_date
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{koName}
+          , #{enName}
+          , #{applicatedDate}
+        )
+    </insert>
+    <insert id="insertPo" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertFeeReq">
+        <!-- 수가 등록 -->
+        insert into prescription_options
+        (
+            prescription_code_id
+          , custom_code
+          , hospital_id
+          , uninsured_price
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{customCode}
+          , #{hospitalId}
+          , #{uninsuredPrice}
+        )
+    </insert>
+
+    <insert id="insertInspectionPc" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertInspectionFeeReq" useGeneratedKeys="true" keyProperty="id">
+        <!-- 검사료 수가 등록 -->
+        insert into prescription_codes
+        (
+            code_type_id
+          , hospital_id
+        )
+        values
+        (
+            #{subdivisionId}
+          , #{hospitalId}
+        )
+    </insert>
+    <insert id="insertInspectionP" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertInspectionFeeReq">
+        <!-- 검사료 수가 등록 -->
+        insert into prescriptions
+        (
+            prescription_code_id
+          , ko_name
+          , en_name
+          , applicated_date
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{koName}
+          , #{enName}
+          , #{applicatedDate}
+        )
+    </insert>
+    <insert id="insertInspectionPo" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertInspectionFeeReq">
+        <!-- 검사료 수가 등록 -->
+        insert into prescription_options
+        (
+            prescription_code_id
+          , custom_code
+          , uninsured_price
+          , specimen_id
+          , examination_type
+          , consignment_id
+          , adult_male_maximum
+          , adult_male_minimum
+          , adult_female_maximum
+          , adult_female_minimum
+          , child_maximum
+          , child_minimum
+          , unit
+          , hospital_id
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{customCode}
+          , #{uninsuredPrice}
+          , #{specimenId}
+          , #{examinationType}
+          , #{consignmentId}
+          , #{adultMaleMaximum}
+          , #{adultMaleMinimum}
+          , #{adultFemaleMaximum}
+          , #{adultFemaleMinimum}
+          , #{childMaximum}
+          , #{childMinimum}
+          , #{unit}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <insert id="insertSurgeryPc" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertSurgeryReq" useGeneratedKeys="true" keyProperty="id">
+        <!-- 처치및수술 수가 등록 -->
+        insert into prescription_codes
+        (
+            code_type_id
+          , hospital_id
+        )
+        values
+        (
+            #{subdivisionId}
+          , #{hospitalId}
+        )
+    </insert>
+    <insert id="insertSurgeryP" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertSurgeryReq">
+        <!-- 처치및수술 수가 등록 -->
+        insert into prescriptions
+        (
+            prescription_code_id
+          , ko_name
+          , en_name
+          , applicated_date
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{koName}
+          , #{enName}
+          , #{applicatedDate}
+        )
+    </insert>
+    <insert id="insertSurgeryPo" parameterType="yezak.api.api.setting.prescription.fee.dto.InsertSurgeryReq">
+        <!-- 처치및수술 수가 등록 -->
+        insert into prescription_options
+        (
+            prescription_code_id
+          , custom_code
+          , uninsured_price
+          , is_product
+          , estimated_time
+          , hospital_id
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{customCode}
+          , #{uninsuredPrice}
+          , #{isProduct}
+          , #{estimatedTime}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <select id="findCustomCode" parameterType="yezak.api.api.setting.prescription.fee.dto.FindCustomCodeReq" resultType="Long">
+        <!-- 사용자코드 중복 확인 -->
+        select id
+          from prescription_options
+         where custom_code = #{customCode}
+           and deleted_at is null
+           and hospital_id = #{hospitalId}
+    </select>
+
+    <delete id="deleteFee" parameterType="Long">
+        <!-- 삭제처리 -->
+        update prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = pc.id
+           set p.deleted_at = now()
+             , po.deleted_at = now()
+         where p.id = #{id}
+    </delete>
+
+    <insert id="updateLibraryFee" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 라이브러리용 수정 -->
+        insert into prescription_options
+        (
+            custom_code
+          , prescription_code_id
+          , hospital_id
+        )
+        values
+        (
+            #{customCode}
+          , #{prescriptionCodeId}
+          , #{hospitalId}
+        )
+    </insert>
+    
+    <insert id="updateSelfFeeP" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 자체등록 수정 -->
+        insert into prescriptions
+        (
+            prescription_code_id
+          , ko_name
+          , en_name
+          , applicated_date
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{koName}
+          , #{enName}
+          , #{applicatedDate}
+        )
+    </insert>
+    <insert id="updateSelfFeePo" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 자체등록 수정 -->
+        insert into prescription_options
+        (
+            prescription_code_id
+          , custom_code
+          , hospital_id
+          , uninsured_price
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{customCode}
+          , #{hospitalId}
+          , #{uninsuredPrice}
+        )
+    </insert>
+
+    <insert id="updateLibraryInspectionFee" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 검사료 라이브러리용 수정 -->
+        insert into prescription_options
+        (
+            prescription_code_id
+          , custom_code
+          , specimen_id
+          , examination_type
+          , consignment_id
+          , adult_male_maximum
+          , adult_male_minimum
+          , adult_female_maximum
+          , adult_female_minimum
+          , child_maximum
+          , child_minimum
+          , unit
+          , hospital_id
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{customCode}
+          , #{specimenId}
+          , #{examinationType}
+          , #{consignmentId}
+          , #{adultMaleMaximum}
+          , #{adultMaleMinimum}
+          , #{adultFemaleMaximum}
+          , #{adultFemaleMinimum}
+          , #{childMaximum}
+          , #{childMinimum}
+          , #{unit}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <insert id="updateSelfInspectionFeeP" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 검사료 자체등록 수정 -->
+        insert into prescriptions
+        (
+            prescription_code_id
+          , ko_name
+          , en_name
+          , applicated_date
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{koName}
+          , #{enName}
+          , #{applicatedDate}
+        )
+    </insert>
+    <insert id="updateSelfInspectionFeePo" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 검사료 자체등록 수정 -->
+        insert into prescription_options
+        (
+            prescription_code_id
+          , custom_code
+          , uninsured_price
+          , specimen_id
+          , examination_type
+          , consignment_id
+          , adult_male_maximum
+          , adult_male_minimum
+          , adult_female_maximum
+          , adult_female_minimum
+          , child_maximum
+          , child_minimum
+          , unit
+          , hospital_id
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{customCode}
+          , #{uninsuredPrice}
+          , #{specimenId}
+          , #{examinationType}
+          , #{consignmentId}
+          , #{adultMaleMaximum}
+          , #{adultMaleMinimum}
+          , #{adultFemaleMaximum}
+          , #{adultFemaleMinimum}
+          , #{childMaximum}
+          , #{childMinimum}
+          , #{unit}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <insert id="updateLibrarySurgeryFee" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 처치및수술 라이브러리 수정 -->
+        insert into prescription_options
+        (
+            prescription_code_id
+          , custom_code
+          , uninsured_price
+          , is_product
+          , estimated_time
+          , hospital_id
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{customCode}
+          , #{uninsuredPrice}
+          , #{isProduct}
+          , #{estimatedTime}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <insert id="updateSelfSurgeryFeeP" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 처치및수술 자체 수정 -->
+        insert into prescriptions
+        (
+            prescription_code_id
+          , ko_name
+          , en_name
+          , applicated_date
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{koName}
+          , #{enName}
+          , #{applicatedDate}
+        )
+    </insert>
+    <insert id="updateSelfSurgeryFeePo" parameterType="yezak.api.api.setting.prescription.fee.dto.UpdateFeeReq">
+        <!-- 처치및수술 자체 수정 -->
+        insert into prescription_options
+        (
+            prescription_code_id
+          , custom_code
+          , uninsured_price
+          , is_product
+          , estimated_time
+          , hospital_id
+        )
+        values
+        (
+            #{prescriptionCodeId}
+          , #{customCode}
+          , #{uninsuredPrice}
+          , #{isProduct}
+          , #{estimatedTime}
+          , #{hospitalId}
+        )
+    </insert>
+    
+    <select id="findPrescriptionCodeIdById" parameterType="Long" resultType="Long">
+        <!-- 수가 코드 id -->
+        select prescription_code_id
+          from prescriptions
+         where id = #{id}
+    </select>
+
+    <update id="updateLibraryDelete" parameterType="Long">
+        <!-- 라이브러리용 업데이트 후 삭제 -->
+        update prescription_options as po
+     left join prescription_codes as pc
+            on pc.id = po.prescription_code_id
+           set po.deleted_at = now()
+         where pc.id = #{prescriptionId}
+    </update>
+
+    <update id="updateSelfDelete" parameterType="Long">
+        <!-- 커스텀 업데이트 후 삭제 -->
+        update prescriptions as p
+     left join prescription_codes as pc
+            on p.prescription_code_id = pc.id
+     left join prescription_options as po
+            on po.prescription_code_id = pc.id
+           set p.deleted_at = now()
+             , po.deleted_at = now()
+         where p.id = #{prescriptionId}
+           and pc.hospital_id = #{hospitalId}
+    </update>
+
+
+
+</mapper>

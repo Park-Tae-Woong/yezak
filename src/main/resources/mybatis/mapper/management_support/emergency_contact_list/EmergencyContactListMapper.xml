@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.emergency_contact_list.EmergencyContactListMapper">
+
+    <select id="emergencyContactList" parameterType="yezak.api.api.management_support.emergency_contact_list.dto.EmergencyContactListReq" resultType="yezak.api.api.management_support.emergency_contact_list.dto.EmergencyContactListRes">
+        select row_number() over (order by u.id) as no
+             , u.id
+             , u.name
+             , rc.id as role_category_id
+             , rc.ko_name as role_category_name
+             , pi.phone_number
+             , u.email
+             , et.id as employment_type_id
+             , et.name as employment_type
+             , es.name as employment_status
+          from users as u
+     left join roles as r
+            on r.id = u.role_id
+     left join role_categories as rc
+            on rc.id = r.role_category_id
+     left join personal_informations as pi
+            on pi.user_id = u.id
+     left join employment_informations as ei
+            on ei.user_id = u.id
+     left join employment_types as et
+            on ei.employment_type_id = et.id
+     left join employment_statuses as es
+            on es.id = ei.employment_status_id
+        <where>
+            <if test="roleCategoryId != null and roleCategoryId != ''">
+                and rc.id = #{roleCategoryId}
+            </if>
+            <if test="employmentTypeId != null and employmentTypeId != ''">
+                and et.id = #{employmentTypeId}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and u.name like concat('%', #{searchValue}, '%')
+            </if>
+            and u.hospital_id = #{hospitalId}
+        </where>
+    </select>
+
+</mapper>

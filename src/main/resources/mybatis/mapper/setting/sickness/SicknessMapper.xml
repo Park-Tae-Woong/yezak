@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.setting.sickness.SicknessMapper">
+
+    <select id="getSickList" resultType="yezak.api.api.setting.sickness.dto.SicknessDto" parameterType="yezak.api.api.setting.sickness.dto.SicknessListReq">
+        <!-- 증상 목록 -->
+        select id
+             , custom_code
+             , content
+          from sicknesses
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and lower(custom_code) like concat('%', #{searchValue}, '%')
+                or lower(content) like concat('%', #{searchValue}, '%')
+            </if>
+            and hospital_id = #{hospitalId}
+            and deleted_at is null
+        </where>
+         order by content COLLATE utf8mb4_bin asc
+    </select>
+
+    <insert id="insertSick" parameterType="yezak.api.api.setting.sickness.dto.CreateSicknessReq">
+        <!--패드 서식 insert -->
+        insert into sicknesses
+        (
+            custom_code
+          , content
+          , hospital_id
+        )
+        values
+        (
+            #{customCode}
+          , #{content}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <update id="updateSick" parameterType="yezak.api.api.setting.sickness.dto.UpdateSicknessReq">
+        <!--패드 서식 update -->
+        update sicknesses
+           set custom_code = #{customCode}
+             , content = #{content}
+         where id = #{id}
+    </update>
+
+    <select id="findByCode" parameterType="String" resultType="String">
+        select custom_code
+          from sicknesses
+         where custom_code = #{customCode}
+    </select>
+
+    <delete id="deleteSick" parameterType="Long">
+        <!--증상 삭제 -->
+        update sicknesses
+           set deleted_at = now()
+         where id = #{id}
+    </delete>
+
+</mapper>

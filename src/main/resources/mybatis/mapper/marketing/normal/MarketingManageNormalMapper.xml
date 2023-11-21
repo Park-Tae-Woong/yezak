@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.marketing.normal.MarketingManageNormalMapper">
+
+    <select id="getReservationStatusesList" resultType="yezak.api.api.marketing.normal.dto.MarketingManageReservationStatusInfo">
+        select
+            id as value,
+            name as text
+        from reservation_statuses
+    </select>
+
+    <select id="getDbList" resultType="yezak.api.api.marketing.normal.dto.MarketingManageNormalDbData">
+        SELECT DISTINCT
+        pci.id AS id, -- DB(고객) 아이디
+        p.name AS name, -- 고객명
+        p.phone_number AS phoneNumber, -- 전화번호
+        ifnull(pci.available_time, '상관없음') AS availableTime, -- 상담가능시간
+        ar.name AS accessRootName, -- 유입경로
+        pci.created_at AS createdAt, -- 등록일
+        u.name AS chargeName, -- 담당자명
+        cs.name AS counselingStatus, -- 상담상태
+        cs.id AS counselingStatusId, -- 상담상태id
+--         rs.name AS reservationStatus -- 예약상태
+        (select
+        b.name
+        from reservations a, reservation_statuses b
+        where a.reservation_status_id = b.id
+        and a.patient_id = p.id
+        order by a.id desc
+        limit 1) as reservationStatus,
+        (select
+        b.id
+        from reservations a, reservation_statuses b
+        where a.reservation_status_id = b.id
+        and a.patient_id = p.id
+        order by a.id desc
+        limit 1) as reservationStatusId
+        FROM patient_counseling_infos pci
+        JOIN patients p ON pci.patient_id = p.id
+        LEFT OUTER JOIN access_roots ar ON p.access_root_id = ar.id
+        LEFT OUTER JOIN user_patient up ON up.patient_id = p.id
+        LEFT OUTER JOIN users u ON up.user_id = u.id
+        LEFT OUTER JOIN counseling_statuses cs ON pci.counseling_status_id = cs.id
+        LEFT OUTER JOIN reservations r ON p.id = r.patient_id
+        LEFT OUTER JOIN reservation_statuses rs ON r.reservation_status_id = rs.id
+        WHERE p.hospital_id = #{hospitalId}
+        and ar.use_yn = 1
+        and ar.deleted_at is null
+        <if test="userId != null">
+            AND up.user_id = #{userId}
+        </if>
+        <if test="searchKeyword != null and searchKeyword != ''">
+            AND (p.name like concat('%', #{searchKeyword}, '%') OR p.phone_number like concat('%', #{searchKeyword}, '%'))
+        </if>
+        ORDER BY pci.created_at DESC
+    </select>
+
+    <select id="getCounselHistoryInfo" parameterType="java.lang.Integer" resultType="yezak.api.api.marketing.normal.dto.MarketingManageNormalCounselHistoryInfo">
+        select
+            a.id AS patientId,
+            b.id AS counselingId,
+            d.ko_name AS roleName,
+            c.name AS userName,
+            b.asked_product AS askedProduct,
+            b.content AS content,
+            b.created_at AS createDate
+        from patients a, counselings b, users c, roles d, patient_counseling_infos pci
+        where a.id = b.patients_id
+          and b.user_id = c.id
+          and c.role_id = d.id
+          and a.id = pci.patient_id
+          and pci.id = #{id}
+        order by b.created_at desc
+    </select>
+
+    <select id="getRoomList" resultType="yezak.api.api.marketing.normal.dto.MarketingManageRoomInfo">
+        select
+            id as id,
+            ko_name as name
+        from rooms
+        where hospital_id = #{hospitalId}
+    </select>
+
+</mapper>

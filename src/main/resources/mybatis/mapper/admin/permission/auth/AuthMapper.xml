@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.admin.permission.auth.AuthMapper">
+
+    <select id="getDepthList" resultType="yezak.api.api.admin.permission.auth.dto.DepthListDto" parameterType="Long">
+        <!-- 실무 메뉴 권한 지정 조회 -->
+        select ko_name
+             , id
+          from depth1_navigations
+    </select>
+    <select id="getDepth1NameOfHospital" parameterType="Long" resultType="String">
+        <!-- 피벗에 있으면 조회되는 koName -->
+        select ko_name
+          from depth1_navigation_hospital
+         where hospital_id = #{hospitalId}
+           and depth1_navigation_id = #{depth1NavigationId}
+    </select>
+    <select id="findByDepth1" parameterType="Long" resultType="Long">
+        <!-- id 있는지 확인용 -->
+        select depth1_navigation_id
+          from depth1_navigation_hospital
+         where depth1_navigation_id = #{depth1NavigationId}
+           and hospital_id = #{hospitalId}
+    </select>
+    <select id="getDepth2List" resultType="yezak.api.api.admin.permission.auth.dto.DepthListDto2" parameterType="Long">
+        <!-- 실무 메뉴 권한 지정 조회 -->
+        select ko_name as d2KoName
+             , id as id
+          from depth2_navigations
+         where depth1_navigation_id = #{depth1NavigationId}
+    </select>
+    <select id="getDepth3List" resultType="yezak.api.api.admin.permission.auth.dto.DepthListDto3" parameterType="Long">
+        <!-- 실무 메뉴 권한 지정 조회 -->
+        select d3n.ko_name as d3KoName
+             , d3n.is_for_admin
+             , d3n.id
+          from depth3_navigations as d3n
+         where d3n.depth2_navigation_id = #{depth2NavigationId}
+    </select>
+
+    <select id="isChecked" resultType="Long" parameterType="Long">
+        select depth3_navigation_id
+          from depth3_navigation_role
+         where role_id = #{roleId}
+    </select>
+
+    <insert id="toShowCheck" parameterType="yezak.api.api.admin.permission.auth.dto.InsertToShow">
+        insert into depth3_navigation_role
+        (
+            role_id
+          , depth3_navigation_id
+        )
+        values
+        (
+            #{roleId}
+          , #{depth3NavigationId}
+        )
+    </insert>
+
+    <delete id="toHideCheck" parameterType="Long">
+        delete from depth3_navigation_role
+         where role_id = #{roleId}
+    </delete>
+
+    <select id="goDepth3" parameterType="Long" resultType="Long">
+        select id
+          from depth3_navigation_role
+         where role_id = #{roleId}
+    </select>
+
+    <select id="getRoleCategories" parameterType="Long" resultType="yezak.api.api.admin.permission.role.dto.RoleCategoryRes">
+        <!-- 직군 카테고리 조회 -->
+        select rc.id
+             , rc.ko_name
+          from role_categories as rc
+    </select>
+
+    <select id="checkAuth" parameterType="Long" resultType="int">
+        select depth3_navigation_id
+          from depth3_navigation_role
+         where role_id = #{roleId}
+    </select>
+
+    <insert id="authLog" parameterType="yezak.api.api.admin.permission.auth.dto.AuthLogReq">
+        <!-- 권한 이력 -->
+        insert into role_logs
+        (
+            affected_user_id
+          , act_user_id
+          , role_id
+          , depth3_navigations_array
+          , ip
+          , hospital_id
+        )
+        values
+        (
+            #{affectedUserId}
+          , #{actUserId}
+          , #{roleId}
+          , #{depth3NavigationsArray}
+          , #{ip}
+          , #{hospitalId}
+        )
+    </insert>
+    <select id="findUserByRoleId" parameterType="Long" resultType="Long">
+        select id
+          from users
+         where role_id = #{roleId}
+    </select>
+
+    <select id="findNavi3Id" parameterType="Long" resultType="String">
+        select group_concat(depth3_navigation_id separator ', ') as depth3Id
+          from depth3_navigation_role
+         where role_id = #{roleId}
+    </select>
+</mapper>

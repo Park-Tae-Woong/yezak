@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.marketing.dashboard.MarketingDashboardMapper">
+
+    <select id="getYearsInfoList" resultType="java.lang.String">
+        select
+            left(created_at, 4) as min
+        from hospitals
+        where id = #{hospitalId}
+    </select>
+
+    <select id="getHospitalGoalsInfo" resultType="java.lang.String">
+        select
+            hg.monthly_sales as monthSalesTarget
+        from hospitals h join hospital_goals hg on h.id = hg.hospital_id
+        where h.id = #{hospitalId}
+          and hg.created_at like concat(#{date}, '%')
+        order by hg.id desc
+        limit 1
+    </select>
+    <select id="getPreMonthSales" resultType="java.lang.Integer">
+        SELECT
+            IFNULL(sum(a.amount),0) as amount
+        from patients p join receptions r on p.id = r.patient_id
+                        join acceptances a on r.id = a.reception_id
+        where p.hospital_id = #{hospitalId}
+          and a.created_at like concat(#{preDate}, '%')
+    </select>
+    <select id="getMonthSales" resultType="java.lang.Integer">
+        SELECT
+            IFNULL(sum(a.amount),0) as amount
+        from patients p join receptions r on p.id = r.patient_id
+                        join acceptances a on r.id = a.reception_id
+        where p.hospital_id = #{hospitalId}
+          and a.created_at like concat(#{date}, '%')
+    </select>
+
+    <select id="getAccessRoot" resultType="yezak.api.api.marketing.dashboard.dto.AccessRootCountInfo">
+        select
+            ar.name as name,
+            count(p.access_root_id) as count
+        from patients p join patient_counseling_infos pci on p.id = pci.patient_id
+            join access_roots ar on ar.id = p.access_root_id
+        where ar.use_yn = 1
+          and ar.hospital_id = #{hospitalId}
+          and ar.deleted_at is null
+          and pci.created_at like concat(#{date},'%')
+        group by p.access_root_id
+        order by count(p.access_root_id) desc
+    </select>
+    <select id="getAdExpenseProfit" resultType="yezak.api.api.marketing.dashboard.dto.AdExpenseProfitInfo" parameterType="java.util.Map">
+        select
+            #{date} as date,
+            a.amount as adExpense,
+            b.amount as profit,
+            (b.amount/a.amount)*100 as roas
+        from
+            (
+                select
+                    ifnull(sum(amount),0) as amount
+                from patient_imports
+                where hospital_id = #{hospitalId}
+                  and created_at like concat(#{date},'%')
+            ) as a,
+            (
+                SELECT
+                    IFNULL(sum(a.amount),0) as amount
+                from patients p join receptions r on p.id = r.patient_id
+                                join acceptances a on r.id = a.reception_id
+                where p.hospital_id = #{hospitalId}
+                  and a.created_at like concat(#{date}, '%')
+                  and p.access_root_id is not null
+            ) as b
+    </select>
+
+    <select id="getGenderAge" resultType="java.util.HashMap">
+        SELECT
+            ageRange,
+            CASE sex_id
+                WHEN 1 THEN '남자'
+                WHEN 2 THEN '여자'
+                else '기타'
+                END AS gender,
+            IFNULL(count, 0) AS count
+        FROM (
+            SELECT
+            CASE
+            WHEN age <![CDATA[<=]]> 14 THEN '0-14'
+            WHEN age BETWEEN 15 AND 24 THEN '15-24'
+            WHEN age BETWEEN 25 AND 34 THEN '25-34'
+            WHEN age BETWEEN 35 AND 44 THEN '35-44'
+            WHEN age BETWEEN 45 AND 54 THEN '45-54'
+            WHEN age BETWEEN 55 AND 64 THEN '55-64'
+            ELSE '65+'
+            END AS ageRange,
+            sex_id,
+            COUNT(*) AS count
+            FROM (
+            select
+            p.sex_id,
+            YEAR(CURDATE()) - (case p.second_registration_number
+            when '0' then concat('18',left(p.first_registration_number,2))
+            when '9' then concat('18',left(p.first_registration_number,2))
+            when '3' then concat('20',left(p.first_registration_number,2))
+            when '4' then concat('20',left(p.first_registration_number,2))
+            else concat('19',left(p.first_registration_number,2))
+            end) AS age
+            from patients p join patient_counseling_infos pci on p.id = pci.patient_id
+            and p.hospital_id = #{hospitalId}
+            and pci.created_at like concat(#{date}, '%')
+            ) AS subquery
+            GROUP BY ageRange, sex_id
+            ) AS final_result
+        ORDER BY ageRange
+    </select>
+
+    <select id="getRegion" resultType="yezak.api.api.marketing.dashboard.dto.RegionCountInfo">
+        select
+            p.address as regionName,
+            count(p.id) as count,
+            (
+                select
+                    count(*)
+                from patients p join patient_counseling_infos pci on p.id = pci.patient_id
+                    and p.hospital_id = #{hospitalId}
+                    and pci.created_at like concat(#{date}, '%')
+            ) as totalCount
+        from patients p join patient_counseling_infos pci on p.id = pci.patient_id
+            and p.hospital_id = #{hospitalId}
+            and pci.created_at like concat(#{date}, '%')
+        group by p.address
+        order by count(p.id) desc
+        limit 5
+    </select>
+
+</mapper>

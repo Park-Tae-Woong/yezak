@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.admin.audit_record.login_log.LoginLogMapper">
+
+    <insert id="insertLoginLog" parameterType="yezak.api.api.admin.audit_record.login_log.dto.LoginLogReq">
+        <!-- 로그인 로그 삽입 -->
+        insert into user_logs
+        (
+            hospital_id
+          , ip
+          , message
+          , act_user_id
+          , affected_user_id
+          , result
+          , distinction
+        )
+        values
+        (
+            #{hospitalId}
+          , #{ip}
+          , #{message}
+          , #{actUserId}
+          , #{affectedUserId}
+          , #{result}
+          , #{distinction}
+        )
+    </insert>
+    <select id="getLoginLogList" parameterType="yezak.api.api.admin.audit_record.login_log.dto.LoginLogListReq" resultType="yezak.api.api.admin.audit_record.login_log.dto.LoginLogRes">
+        <!-- 로그 조회 -->
+        select u.email
+             , ul.distinction
+             , ul.result
+             , ul.message
+             , ul.created_at
+             , ul.ip
+          from user_logs as ul
+     left join users as u
+            on ul.act_user_id = u.id
+        <where>
+            <choose>
+                <when test="start != null and start != '' and end != null and end != ''">
+                    and ul.created_at between #{start} and date_sub(date_add(#{end}, interval 1 day), interval 1 second)
+                </when>
+                <otherwise>
+                    and ul.created_at &gt;= date_sub(now(), interval 3 month)
+                </otherwise>
+            </choose>
+            and ul.hospital_id = #{hospitalId}
+            and ul.distinction = '로그인'
+        </where>
+        order by ul.created_at desc
+        limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countLoginLogList" parameterType="yezak.api.api.admin.audit_record.login_log.dto.LoginLogListReq" resultType="int">
+        <!-- 로그 조회 -->
+        select count(*)
+          from user_logs as ul
+     left join users as u
+            on ul.act_user_id = u.id
+        <where>
+            <choose>
+                <when test="start != null and start != '' and end != null and end != ''">
+                    and ul.created_at between #{start} and date_sub(date_add(#{end}, interval 1 day), interval 1 second)
+                </when>
+                <otherwise>
+                    and ul.created_at &gt;= date_sub(now(), interval 3 month)
+                </otherwise>
+            </choose>
+            and ul.hospital_id = #{hospitalId}
+            and ul.distinction = '로그인'
+        </where>
+        order by ul.created_at desc
+    </select>
+
+    <select id="loginLogExcel" parameterType="yezak.api.api.admin.audit_record.login_log.dto.LoginLogListReq" resultType="yezak.api.api.admin.audit_record.login_log.dto.LoginLogRes">
+        <!-- 엑셀용 조회 -->
+        select u.email
+             , ul.distinction
+             , ul.result
+             , ul.message
+             , ul.created_at
+             , ul.ip
+          from user_logs as ul
+     left join users as u
+            on ul.act_user_id = u.id
+        <where>
+            <choose>
+                <when test="start != null and start != '' and end != null and end != ''">
+                    and ul.created_at between #{start} and date_sub(date_add(#{end}, interval 1 day), interval 1 second)
+                </when>
+                <otherwise>
+                    and ul.created_at &gt;= date_sub(now(), interval 3 month)
+                </otherwise>
+            </choose>
+            and ul.hospital_id = #{hospitalId}
+            and ul.distinction = '로그인'
+        </where>
+        order by ul.created_at desc
+    </select>
+
+</mapper>

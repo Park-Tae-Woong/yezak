@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.user.UserMapper">
+
+    <select id="getMyPage" parameterType="Long" resultType="yezak.api.api.user.dto.GetMyPageRes">
+        <!-- 마이페이지 -->
+        select u.name
+             , u.email
+             , pi.first_registration_number
+             , pi.second_registration_number
+             , pi.sex
+             , pi.phone_number
+             , pi.sub_phone_number
+             , pi.post_code
+             , pi.address
+             , pi.address_detail
+             , case
+                when rc.is_doctor = 1 then u.doctor_license_number
+                when rc.is_doctor = 0 then u.medical_license_number
+                end as license_number
+          from users as u
+     left join personal_informations as pi
+            on u.id = pi.user_id
+     left join roles as r
+            on r.id = u.role_id
+     left join role_categories as rc
+            on rc.id = r.role_category_id
+         where u.id = #{id}
+    </select>
+
+    <update id="updateMyPage" parameterType="yezak.api.api.user.dto.UserUpdateReq">
+        <!-- 마이페이지 수정 -->
+        update users as u
+        left join personal_informations as pi
+               on u.id = pi.user_id
+        left join roles as r
+               on r.id = u.role_id
+        left join role_categories as rc
+               on rc.id = r.role_category_id
+              set u.name = #{name}
+                , pi.first_registration_number = #{firstRegistrationNumber}
+                , pi.second_registration_number = #{secondRegistrationNumber}
+                , pi.sex = #{sex}
+                , pi.phone_number = #{phoneNumber}
+                , pi.sub_phone_number = #{subPhoneNumber}
+                , pi.post_code = #{postCode}
+                , pi.address = #{address}
+                , pi.address_detail = #{addressDetail}
+                , u.doctor_license_number = CASE
+                                            WHEN rc.is_doctor = 1 THEN #{licenseNumber}
+                                            ELSE u.doctor_license_number
+                                            END
+                , u.medical_license_number = CASE
+                                             WHEN rc.is_doctor = 0 THEN #{licenseNumber}
+                                             ELSE u.medical_license_number
+                                             END
+            where u.id = #{id}
+    </update>
+
+    <select id="findByEmail" parameterType="String" resultType="yezak.api.domain.User">
+        select *
+          from users
+         where email = #{email}
+    </select>
+    <select id="findById" parameterType="Long" resultType="yezak.api.domain.User">
+        select *
+          from users
+         where id = #{id}
+    </select>
+
+    <update id="updatePw" parameterType="yezak.api.api.user.dto.UpdatePasswordReq">
+        <!-- 비밀번호 수정 -->
+        update users
+           set password = #{password}
+             , password_changed_at = now()
+             , temporary_password = null
+             , temporary_password_expired_at = null
+         where id = #{userId}
+    </update>
+    <update id="newMemberUpdatePw" parameterType="yezak.api.api.user.dto.NewMemberUpdatePasswordReq">
+        <!-- 신규회원 및 6개월 회원 비밀번호 수정 -->
+        update users
+           set password = #{password}
+             , password_changed_at = now()
+         where email = #{email}
+    </update>
+
+    <update id="deleteTempPw" parameterType="String">
+        <!-- 신규회원 비밀번호 수정 시 임시비밀번호 삭세 -->
+        update users
+           set temporary_password = null
+             , temporary_password_expired_at = null
+         where email = #{email}
+    </update>
+
+    <update id="updateLastPassword" parameterType="yezak.api.api.user.dto.UpdateLastPasswordReq">
+        <!-- 전 비번 수정 -->
+        update users
+           set last_password = #{lastPassword}
+         where email = #{email}
+    </update>
+    <update id="updateLastLastPassword" parameterType="yezak.api.api.user.dto.UpdateLastLastPasswordReq">
+        <!-- 전전 비번 수정 -->
+        update users
+           set last_last_password = #{lastLastPassword}
+         where email = #{email}
+    </update>
+
+    <select id="checkLastPassword" parameterType="String" resultType="yezak.api.api.user.dto.CheckLastPassword">
+        <!-- 전 비밀번호 조회 -->
+        select ifnull(last_password, temporary_password) as lastPassword
+             , ifnull(last_last_password, temporary_password) as lastLastPassword
+          from users
+         where email = #{email}
+    </select>
+
+</mapper>

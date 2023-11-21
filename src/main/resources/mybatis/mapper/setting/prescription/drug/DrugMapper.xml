@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.setting.prescription.drug.DrugMapper">
+
+    <select id="drugList" parameterType="yezak.api.api.setting.prescription.drug.dto.DrugListReq" resultType="yezak.api.api.setting.prescription.drug.dto.DrugListRes">
+        <!-- 약가 리스트 -->
+        select d.id
+             , dc.hospital_id
+             , d.dosage_form
+             , do.id as custom_code_id
+             , do.custom_code
+             , dc.id as drug_code_id
+             , dc.code
+             , d.ko_name
+             , d.company_name
+             , d.unit
+             , d.max_value
+             , do.uninsured_price
+             , (case
+                    when dc.hospital_id = 0 then '라이브러리'
+                    else '자체 등록'
+                 end) as inserted
+          from drugs as d
+     left join drug_codes as dc
+            on d.drug_code_id = dc.id
+     left join drug_options as do
+            on do.drug_code_id = dc.id
+        <where>
+            <if test="dosageForm != null and dosageForm != ''">
+                and d.dosage_form = #{dosageForm}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and (do.custom_code like concat('%', #{searchValue}, '%')
+                 or d.ko_name like concat('%', #{searchValue}, '%')
+                 or d.company_name like concat('%', #{searchValue}, '%'))
+            </if>
+            and (dc.hospital_id = 0 or dc.hospital_id = #{hospitalId})
+            and (do.hospital_id is null or do.hospital_id = #{hospitalId})
+            and d.deleted_at is null
+            and do.deleted_at is null
+        </where>
+        limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countDrug" parameterType="yezak.api.api.setting.prescription.drug.dto.DrugListReq" resultType="int">
+        <!-- 약가 페이징 필터 -->
+        select count(*)
+          from drugs as d
+     left join drug_codes as dc
+            on d.drug_code_id = dc.id
+     left join drug_options as do
+            on do.drug_code_id = dc.id
+        <where>
+            <if test="dosageForm != null and dosageForm != ''">
+                and d.dosage_form = #{dosageForm}
+            </if>
+            <if test="searchValue != null and searchValue != ''">
+                and (do.custom_code like concat('%', #{searchValue}, '%')
+                or d.ko_name like concat('%', #{searchValue}, '%')
+                or d.company_name like concat('%', #{searchValue}, '%'))
+            </if>
+            and (dc.hospital_id = 0 or dc.hospital_id = #{hospitalId})
+            and (do.hospital_id is null or do.hospital_id = #{hospitalId})
+            and d.deleted_at is null
+            and do.deleted_at is null
+        </where>
+    </select>
+
+    <select id="systemDrugDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.drug.dto.SystemDrugDetailRes">
+        <!-- 라이브러리 세부 조회 -->
+        select d.id                                             <!-- 약가 id -->
+             , dc.hospital_id                                   <!-- 병원 id -->
+             , do.custom_code                                   <!-- 사용자코드 -->
+             , d.dosage_form                                    <!-- 투여경로 -->
+             , dc.code as drug_code                             <!-- 약품코드 -->
+             , d.ko_name                                        <!-- 품명 -->
+             , d.company_name                                   <!-- 업소명 -->
+             , d.capacity                                       <!-- 규격 -->
+             , d.unit                                           <!-- 단위 -->
+             , d.max_value                                      <!-- 상한가 -->
+             , group_concat(pt.id) as pay_type_id               <!-- 본인부담률 id -->
+             , group_concat(pt.name) as pay_type_name           <!-- 본인부담률 -->
+             , d.applicated_date                                <!-- 적용날짜 -->
+         from drugs as d
+     left join drug_codes as dc
+            on d.drug_code_id = dc.id
+     left join drug_options as do
+            on do.drug_code_id = dc.id
+     left join pay_type_drug as ptd
+            on ptd.drug_id = d.id
+     left join pay_types as pt
+            on pt.id = ptd.pay_type_id
+         where d.id = #{id}
+           and do.deleted_at is null
+      order by d.applicated_date desc
+    </select>
+
+    <select id="myHospitalDrugDetail" parameterType="Long" resultType="yezak.api.api.setting.prescription.drug.dto.MyHospitalDrugDetailRes">
+        <!-- 자체등록 약가 세부 조회 -->
+        select d.id                                     <!-- 약가 id -->
+             , dc.hospital_id                           <!-- 병원 id -->
+             , do.custom_code                           <!-- 사용자코드 -->
+             , d.dosage_form                            <!-- 투여경로 -->
+             , dc.code                                  <!-- 약가 id -->
+             , d.ko_name                                <!-- 품명 -->
+             , d.company_name                           <!-- 업소명 -->
+             , d.capacity                               <!-- 규격 -->
+             , d.unit                                   <!-- 단위 -->
+             , do.uninsured_price                       <!-- 비급여금액 -->
+             , d.applicated_date                        <!-- 적용날짜 -->
+          from drugs as d
+     left join drug_codes as dc
+            on d.drug_code_id = dc.id
+     left join drug_options as do
+            on do.drug_code_id = dc.id
+     left join pay_type_drug as ptd
+            on ptd.drug_id = d.id
+     left join pay_types as pt
+            on pt.id = ptd.pay_type_id
+         where d.id = #{id}
+           and do.deleted_at is null
+      order by d.applicated_date desc
+    </select>
+
+    <select id="maxValueChangeLog" parameterType="Long" resultType="yezak.api.api.setting.prescription.drug.dto.MaxValueChangeLogRes">
+        <!-- 라이브러리 변경내역 -->
+        select d.max_value
+             , d.applicated_date
+          from drugs as d
+     left join drug_codes as dc
+            on dc.id = d.drug_code_id
+         where dc.id = #{codeId}
+      order by d.id desc
+         limit 3
+    </select>
+
+    <select id="dateChangeLog" parameterType="Long" resultType="String">
+        <!-- 변경내역 적용일 -->
+        select d.applicated_date
+          from drug_codes as dc
+     left join drugs as d
+            on d.drug_code_id = dc.id
+         where dc.id = #{codeId}
+      order by d.id desc
+         limit 3
+    </select>
+
+    <select id="priceChangeLog" parameterType="Long" resultType="java.lang.Integer">
+        <!-- 변경내역 금액 -->
+        select do.uninsured_price
+          from drug_codes as dc
+     left join drug_options as do
+            on do.drug_code_id = dc.id
+         where dc.id = #{codeId}
+      order by do.id desc
+         limit 3
+    </select>
+
+    <select id="findHospitalId" parameterType="Long" resultType="Long">
+        select dc.hospital_id
+          from drug_codes as dc
+     left join drugs as d
+            on d.drug_code_id = dc.id
+         where d.id = #{id}
+    </select>
+
+    <select id="exceptionDrugCodes" resultType="String">
+        <!-- 약가 예외 코드 리스트-->
+        select code from exception_drugs
+    </select>
+    
+    <insert id="drugOption" parameterType="yezak.api.api.setting.prescription.drug.dto.InsertDrugReq">
+        insert into drug_options
+        (
+            custom_code
+          , drug_code_id
+          , uninsured_price
+          , hospital_id
+        )
+        values
+        (
+            #{customCode}
+          , #{drugCodeId}
+          , #{uninsuredPrice}
+          , #{hospitalId}
+        )
+    </insert>
+
+    <insert id="drugCode" parameterType="yezak.api.api.setting.prescription.drug.dto.InsertDrugReq" useGeneratedKeys="true" keyProperty="id">
+        insert into drug_codes
+        (
+            code
+          , hospital_id
+        )
+        values
+        (
+            #{code}
+          , #{hospitalId}
+        )
+    </insert>
+    <insert id="insertDrug" parameterType="yezak.api.api.setting.prescription.drug.dto.InsertDrugReq">
+        insert into drugs
+        (
+            ko_name
+          , company_name
+          , capacity
+          , dosage_form
+          , unit
+          , drug_code_id
+          , applicated_date
+        )
+        values
+        (
+            #{koName}
+          , #{companyName}
+          , #{capacity}
+          , #{dosageForm}
+          , #{unit}
+          , #{drugCodeId}
+          , #{applicatedDate}
+        )
+    </insert>
+
+
+    <insert id="updateSystemDrug" parameterType="yezak.api.api.setting.prescription.drug.dto.UpdateDrugReq">
+        insert into drug_options
+        (
+          custom_code
+        , drug_code_id
+        , hospital_id
+        )
+        values
+        (
+          #{customCode}
+        , #{drugCodeId}
+        , #{hospitalId}
+        )
+    </insert>
+
+    <select id="findCodeAndHosByDrugId" parameterType="Long" resultType="yezak.api.api.setting.prescription.drug.dto.FindCodeAndHosByDrugIdRes">
+        select d.drug_code_id
+             , dc.hospital_id
+          from drugs as d
+     left join drug_codes as dc
+            on dc.id = d.drug_code_id
+         where d.id = #{id}
+    </select>
+
+    <insert id="updateDrugOption" parameterType="yezak.api.api.setting.prescription.drug.dto.UpdateDrugReq">
+        insert into drug_options
+        (
+          custom_code
+        , drug_code_id
+        , uninsured_price
+        , hospital_id
+        )
+        values
+        (
+          #{customCode}
+        , #{drugCodeId}
+        , #{uninsuredPrice}
+        , #{hospitalId}
+        )
+    </insert>
+
+    <insert id="updateDrug" parameterType="yezak.api.api.setting.prescription.drug.dto.UpdateDrugReq">
+        insert into drugs
+        (
+          dosage_form
+        , ko_name
+        , company_name
+        , capacity
+        , unit
+        , drug_code_id
+        , applicated_date
+        )
+        values
+        (
+          #{dosageForm}
+        , #{koName}
+        , #{companyName}
+        , #{capacity}
+        , #{unit}
+        , #{drugCodeId}
+        , #{applicatedDate}
+        )
+    </insert>
+
+    <update id="deleteOld" parameterType="Long">
+        <!-- update 후 예전 id delete 처리 -->
+        update drugs as d
+     left join drug_codes as dc
+            on d.drug_code_id = dc.id
+     left join drug_options as do
+            on do.drug_code_id = dc.id
+           set d.deleted_at = now()
+             , do.deleted_at = now()
+         where dc.id = #{id}
+           and dc.hospital_id = #{hospitalId}
+    </update>
+    <select id="findCustomCode" parameterType="yezak.api.api.setting.prescription.drug.dto.FindCustomCode" resultType="Long">
+        select id
+          from drug_options
+         where hospital_id = #{hospitalId}
+           and deleted_at is null
+           and custom_code = #{customCode}
+    </select>
+    <select id="findDrugCode" parameterType="yezak.api.api.setting.prescription.drug.dto.FindDrugCode" resultType="Long">
+        <!-- 약품코드 중복검사용 -->
+        select id
+          from drug_codes
+         where code = #{code}
+           and (hospital_id = #{hospitalId} or hospital_id = 0)
+           and deleted_at is null
+    </select>
+
+    <update id="deleteOldOption" parameterType="Long">
+        update drug_options
+           set deleted_at = now()
+         where drug_code_id = #{drugCodeId}
+           and hospital_id = #{hospitalId}
+    </update>
+
+    <update id="deleteDrug" parameterType="Long">
+        <!-- update 후 예전 id delete 처리 -->
+        update drugs as d
+     left join drug_codes as dc
+            on d.drug_code_id = dc.id
+     left join drug_options as do
+            on do.drug_code_id = dc.id
+           set d.deleted_at = now()
+             , do.deleted_at = now()
+         where d.id = #{id}
+           and dc.hospital_id = #{hospitalId}
+    </update>
+
+
+
+</mapper>

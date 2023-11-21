@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.attendance.vacation_manage.VacationManageMapper">
+
+    <select id="vacationManageList" parameterType="yezak.api.api.management_support.attendance.vacation.dto.VacationManageReq" resultType="yezak.api.api.management_support.attendance.vacation.dto.MyVacationRes">
+        <!-- 휴가관리 리스트 -->
+        select u.name
+             , ei.joined_at
+             , v.paid_leave
+             , v.unpaid_leave
+             , sum(v.paid_leave + v.unpaid_leave) as total
+          from vacations as v
+     left join users as u
+            on u.id = v.user_id
+     left join employment_informations as ei
+            on ei.user_id = u.id
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and u.name like concat('%', #{searchValue}, '%')
+            </if>
+            and u.hospital_id = #{hospitalId}
+            and v.year = #{year}
+        </where>
+        group by u.name
+    </select>
+
+    <select id="nameList" parameterType="yezak.api.api.management_support.attendance.vacation_manage.dto.NameListReq" resultType="Map">
+        <!-- 직원 리스트 -->
+        select id as value
+             , name as text
+          from users
+        <where>
+            <if test="searchValue != null and searchValue != ''">
+                and name like concat('%', #{searchValue}, '%')
+            </if>
+            and hospital_id = #{hospitalId}
+        </where>
+    </select>
+
+    <update id="increasePaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation_manage.dto.IncreasePaidLeaveReq">
+        <!-- 유급휴가 증가 -->
+        update vacations
+           set paid_leave = paid_leave + #{paidLeave}
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+
+    <update id="increaseUnpaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation_manage.dto.IncreaseUnpaidLeaveReq">
+        <!-- 무급휴가 증가 -->
+        update vacations
+           set unpaid_leave = unpaid_leave - #{unpaidLeave}
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+    
+    <update id="decreasePaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation_manage.dto.DecreasePaidLeaveReq">
+        <!-- 유급휴가 회수 -->
+        update vacations
+           set paid_leave = paid_leave - #{paidLeave}
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+
+    <update id="decreaseUnpaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation_manage.dto.DecreaseUnpaidLeaveReq">
+        <!-- 무급휴가 회수 -->
+        update vacations
+           set paid_leave = paid_leave - #{unpaidLeave}
+         where user_id = #{userId}
+           and year = #{year}
+    </update>
+    <select id="checkPaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation_manage.dto.CheckLeaveReq" resultType="double">
+        select paid_leave
+          from vacations
+         where user_id = #{userId}
+           and year = #{year}
+    </select>
+    <select id="checkUnpaidLeave" parameterType="yezak.api.api.management_support.attendance.vacation_manage.dto.CheckLeaveReq" resultType="double">
+        select unpaid_leave
+          from vacations
+         where user_id = #{userId}
+           and year = #{year}
+    </select>
+
+
+</mapper>

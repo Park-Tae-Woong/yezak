@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.management_support.attendance.attendance.AttendanceMapper">
+
+    <select id="attendanceRecord" resultType="yezak.api.api.management_support.attendance.attendance.dto.AttendanceRecordDto" parameterType="yezak.api.api.management_support.attendance.attendance.dto.AttendanceSearchDto">
+        <!-- 근무일정 정보 -->
+        select a.name
+             , concat(date_format(date, '%m'), '월') as month
+             , MAX(case when dayofweek(date) = 2 then CONCAT(date_format(date, '%d'), ' (월)') end) as monday
+             , MAX(CASE WHEN DAYOFWEEK(date) = 3 THEN CONCAT(DATE_FORMAT(date, '%d'), ' (화)') END) AS tuesday
+             , MAX(case when dayofweek(date) = 4 then concat(date_format(date, '%d'), ' (수)') end) as wednesday
+             , MAX(case when dayofweek(date) = 5 then concat(date_format(date, '%d'), ' (목)') end) as thursday
+             , MAX(case when dayofweek(date) = 6 then concat(date_format(date, '%d'), ' (금)') end) as friday
+             , MAX(case when dayofweek(date) = 7 then concat(date_format(date, '%d'), ' (토)') end) as saturday
+             , MAX(case when dayofweek(date) = 1 then concat(date_format(date, '%d'), ' (일)') end) as sunday
+             , MAX(CASE WHEN dayofweek(date) = 2 THEN commuting_time END) AS mon_commuting_time
+             , MAX(CASE WHEN dayofweek(date) = 2 THEN leaving_time END) AS mon_leaving_time
+             , MAX(CASE WHEN dayofweek(date) = 3 THEN commuting_time END) AS tue_commuting_time
+             , MAX(CASE WHEN dayofweek(date) = 3 THEN leaving_time END) AS tue_leaving_time
+             , MAX(CASE WHEN dayofweek(date) = 4 THEN commuting_time END) AS wed_commuting_time
+             , MAX(CASE WHEN dayofweek(date) = 4 THEN leaving_time END) AS wed_leaving_time
+             , MAX(CASE WHEN dayofweek(date) = 5 THEN commuting_time END) AS thu_commuting_time
+             , MAX(CASE WHEN dayofweek(date) = 5 THEN leaving_time END) AS thu_leaving_time
+             , MAX(CASE WHEN dayofweek(date) = 6 THEN commuting_time END) AS fri_commuting_time
+             , MAX(CASE WHEN dayofweek(date) = 6 THEN leaving_time END) AS fri_leaving_time
+             , MAX(CASE WHEN dayofweek(date) = 7 THEN commuting_time END) AS sat_commuting_time
+             , MAX(CASE WHEN dayofweek(date) = 7 THEN leaving_time END) AS sat_leaving_time
+             , MAX(CASE WHEN dayofweek(date) = 1 THEN commuting_time END) AS sun_commuting_time
+             , MAX(CASE WHEN dayofweek(date) = 1 THEN leaving_time END) AS sun_leaving_time
+          from attendances as a
+     left join hospitals as h
+            on h.id = a.hospital_id
+        <where>
+            <if test="name != null and name != ''">
+                and a.name like concat('%', #{name}, '%')
+            </if>
+            <choose>
+                <when test="start != null and start != '' and end != null and end != ''">
+                    and a.date between date_sub(#{start}, interval (dayofweek(#{start})-2) day)
+                    and date_add(#{end}, interval (6-dayofweek(#{end})) day)
+                </when>
+                <otherwise>
+                    and a.date between date_sub(curdate(), interval (dayofweek(curdate())-2) day)
+                    and date_add(CURRENT_DATE, interval (6-dayofweek(curdate())) day)
+                </otherwise>
+            </choose>
+            and a.hospital_id = #{hospitalId}
+        </where>
+        group by a.name
+    </select>
+
+    <insert id="createAttendance" parameterType="yezak.api.api.management_support.attendance.attendance.dto.CreateAttendanceDto">
+        <!-- 엑셀업로드 -->
+        insert into attendances
+        (
+            name
+          , date
+          , commuting_time
+          , leaving_time
+          , hospital_id
+        )
+        values
+        (
+            #{name}
+          , #{date}
+          , #{commutingTime}
+          , #{leavingTime}
+          , #{hospitalId}
+        )
+    </insert>
+</mapper>

@@ -1,0 +1,487 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.reception.ReceptionMapper">
+
+	<select id="selectPatientsInfo" resultType="yezak.api.api.reception.dto.ReceptionPatientInfo">
+		<!-- 검색 -->
+		SELECT
+		    p.id as id,
+			p.chart_number as chartNumber,
+			p.name as name,
+		    concat(p.first_registration_number,'-',p.second_registration_number) as registrationNumber,
+			p.phone_number as phoneNumber
+		FROM patients p
+		<where>
+			<if test="searchKeyword != null and !searchKeyword.equals('')">
+				AND (p.name like concat('%',#{searchKeyword},'%')
+				OR p.chart_number like concat('%',#{searchKeyword},'%')
+				OR p.first_registration_number like concat('%',#{searchKeyword},'%')
+				OR p.phone_number like concat('%',#{searchKeyword},'%'))
+			</if>
+		</where>
+		ORDER BY id DESC
+	</select>
+
+	<select id="selectTodayReceptionList" parameterType="yezak.api.api.reception.dto.TodayReceptionReq" resultType="yezak.api.api.reception.dto.TodayReceptionInfo">
+		<!-- 금일 접수 현황 -->
+		select
+			a.id as id,
+			a.chart_number as chartNumber,
+			a.name as name,
+			a.age as age,
+			a.gender as gender,
+			a.created_at as createdAt,
+			a.reservated_at as reservatedAt,
+			a.doctorName as doctorName,
+			if(((to_days(now()) - to_days(a.lastCreatedAt)) > 90) or a.lastCreatedAt is null, '초진', '재진') as gubun
+		from (
+				 select
+					 r.id,
+					 p.chart_number,
+					 p.name,
+					 YEAR(CURDATE()) - (case p.second_registration_number
+					 						when '0' then concat('18',left(p.first_registration_number,2))
+					 						when '9' then concat('18',left(p.first_registration_number,2))
+											when '3' then concat('20',left(p.first_registration_number,2))
+											when '4' then concat('20',left(p.first_registration_number,2))
+											else concat('19',left(p.first_registration_number,2))
+										end) AS age,
+					 s.name as gender,
+					 p.created_at,
+					 rv.reservated_at,
+					 (select name from users where id = up.user_id) as doctorName,
+					 (select created_at from receptions where patient_id = p.id order by id desc limit 1, 1) as lastCreatedAt
+				 from receptions r
+					 left join patients p
+							on r.patient_id = p.id
+					 left join reservations as rv
+							on r.reservation_id = rv.id
+					 left join user_patient up
+							on p.id = up.patient_id
+					 left join sexes s
+							on p.sex_id = s.id
+				 where date(r.created_at) = CURDATE()
+				   and p.hospital_id = #{hospitalId}
+				 order by r.created_at asc
+			 ) a
+		<where>
+			<choose>
+				<when test="gubun == '초진'">
+					((to_days(now()) - to_days(a.lastCreatedAt)) > 90 OR a.lastCreatedAt is null)
+				</when>
+				<when test="gubun == '재진'">
+					((to_days(now()) - to_days(a.lastCreatedAt)) &lt;= 90 AND a.lastCreatedAt is not null)
+				</when>
+				<otherwise>
+				</otherwise>
+			</choose>
+		</where>
+	</select>
+
+	<select id="selectTodayHospitalStateList" parameterType="Long" resultType="yezak.api.api.reception.dto.TodayHospitalStateInfo">
+		<!-- 병원 현황 -->
+		select r.id as id
+			 , p.chart_number
+			 , p.name
+			 , YEAR(CURDATE()) - (case p.second_registration_number
+									when '0' then concat('18',left(p.first_registration_number,2))
+									when '9' then concat('18',left(p.first_registration_number,2))
+									when '3' then concat('20',left(p.first_registration_number,2))
+									when '4' then concat('20',left(p.first_registration_number,2))
+									else concat('19',left(p.first_registration_number,2))
+								  end) AS age
+			 , s.name as gender
+			 , rv.reservated_at
+			 , r3.ko_name as roomName
+			 , (select name from users where id = up.user_id) as doctorName
+			 , s2.name as state
+		  from receptions r
+	 left join patients p
+			on r.patient_id = p.id
+	 left join reservations rv
+			on r.reservation_id = rv.id
+	 left join user_patient up
+			on p.id = up.patient_id
+	 left join sexes s
+			on p.sex_id = s.id
+	 left join statuses s2
+			on r.status_id = s2.id
+	 left join rooms r3
+			on r.room_id = r3.id
+		 where date(r.created_at) = CURDATE()
+		   and r3.schedule_category_id != 5
+		   and s2.use_yn = 1
+		   and r.room_id = #{roomId}
+		   and p.hospital_id = #{hospitalId}
+		   and r.acceptance_done = 0
+	  order by r.created_at asc
+	</select>
+
+	<select id="selectRoomList" resultType="yezak.api.api.reception.dto.ReceptionRoomListInfo">
+		<!-- 대기실 리스트 -->
+		select
+		    id as value,
+			ko_name as text
+		from rooms
+		where deleted_at is null
+		and schedule_category_id != 5
+	</select>
+
+	<update id="updateRoom" parameterType="yezak.api.api.reception.dto.UpdateRoomReq">
+		<!-- 대기실 변경 -->
+		update receptions as r
+		   set r.room_id = #{roomId}
+		 where r.id = #{id}
+	</update>
+	<update id="outHospital" parameterType="Long">
+		<!-- 병원밖으로 -->
+		update receptions
+		   set acceptance_done = 1
+		 where id = #{id}
+	</update>
+	<update id="updateStatus" parameterType="yezak.api.api.reception.dto.UpdateStatusReq">
+		<!-- 상태 변경 -->
+		update receptions as r
+		   set r.status_id = #{statusId}
+		 where r.id = #{id}
+	</update>
+
+	<select id="selectStatusList" resultType="Map">
+		<!-- 병원 내 진행상태 -->
+		select id as value
+			 , name as text
+		  from statuses
+	</select>
+
+	<delete id="deleteReception" parameterType="Long">
+		<!-- 접수 취소 -->
+		delete from receptions
+		 where id = #{id}
+	</delete>
+
+	<select id="waitReceptionList" parameterType="Long" resultType="yezak.api.api.reception.dto.WaitReceptionListRes">
+		<!-- 접수 대기 -->
+		select r.id as receptionId
+			 , p.id as patientId
+			 , p.chart_number
+			 , p.name as patientName
+			 , concat(p.first_registration_number,'-',p.second_registration_number) as registrationNumber
+			 , YEAR(CURDATE()) - (case p.second_registration_number
+									when '0' then concat('18',left(p.first_registration_number,2))
+									when '9' then concat('18',left(p.first_registration_number,2))
+									when '3' then concat('20',left(p.first_registration_number,2))
+									when '4' then concat('20',left(p.first_registration_number,2))
+									else concat('19',left(p.first_registration_number,2))
+								  end) AS age
+			 , s.name as sex
+			 , rv.reservated_at
+			 , ifnull(u.name, '-') as doctorName
+		  from patients as p
+	 left join sexes as s
+			on s.id = p.sex_id
+	 left join receptions as r
+			on r.patient_id = p.id
+	 left join reservations as rv
+			on rv.id = r.reservation_id
+	 left join user_patient as up
+			on up.patient_id = p.id
+	 left join users as u
+			on u.id = up.user_id
+		 where r.room_id is null
+		   and p.hospital_id = #{hospitalId}
+		   and date(r.created_at) = CURDATE()
+	</select>
+
+	<select id="findReceptionId" parameterType="Long" resultType="Long">
+		<!-- 신환 확인 -->
+		select count(r.id)
+		  from receptions as r
+	 left join patients as p
+			on p.id = r.patient_id
+		 where p.id = #{patientId}
+	</select>
+
+	<select id="findPatientByNameAndRegisNum" parameterType="String" resultType="Long">
+		<!-- 신규환자 등록 시 중복 검사 -->
+		select id
+		  from patients
+		 where name = #{name}
+		   and first_registration_number = #{firstRegistrationNumber}
+		   and second_registration_number = #{secondRegistrationNumber}
+	</select>
+
+	<insert id="newPatient" parameterType="yezak.api.api.reception.dto.NewPatientReq">
+		<!-- 신규환자 등록 -->
+		insert into patients
+		(
+			name
+		  , first_registration_number
+		  , second_registration_number
+		  , phone_number
+		  , address
+		  , address_detail
+		  , agreed_personal
+		  , agreed_marketing
+		  , agreed_settlement
+		  , sex_id
+		  , hospital_id
+		)
+		values
+		(
+			#{name}
+		  , #{firstRegistrationNumber}
+		  , #{secondRegistrationNumber}
+		  , #{phoneNumber}
+		  , #{address}
+		  , #{addressDetail}
+		  , #{agreedPersonal}
+		  , #{agreedMarketing}
+		  , #{agreedSettlement}
+		  , #{sexId}
+		  , #{hospitalId}
+		)
+	</insert>
+
+	<select id="recentReceptionRecord" parameterType="yezak.api.api.reception.dto.RecentReceptionRecordReq" resultType="yezak.api.api.reception.dto.RecentReceptionRecordRes">
+		<!-- 최근 접수기록 -->
+		select a.id
+			 , a.created_at
+			 , (case
+					when (to_days(now()) - to_days(a.lastCreatedAt) &gt; 90) or a.lastCreatedAt is null then '초진'
+					else '재진'
+				end) as gubun
+			 , a.doctorName
+			 , ifnull(a.visitPurpose, '방문목적 없음') as visitPurpose
+		  from (select r.id
+			 	 	 , r.created_at
+			 		 , (select created_at from receptions where patient_id = p.id order by id asc limit 1) as lastCreatedAt
+			 		 , ifnull(it.name, '비급여') as insuranceName
+			 		 , (select name from users where id = up.user_id) as doctorName
+			 		 , vp.name as visitPurpose
+				 from receptions as r
+	 		left join patients as p
+				   on p.id = r.patient_id
+			left join user_patient as up
+		 	 	   on up.patient_id = p.id
+			left join insurance_types as it
+				   on it.id = r.insurance_type_id
+			left join visit_purposes as vp
+				   on r.visit_purpose_id = vp.id
+				<where>
+					<if test="start != null and start != '' and end != null and end != ''">
+						and r.created_at between #{start} and #{end}
+					</if>
+					<if test="start == null and start == '' and end == null and end == ''">
+						and r.created_at &gt;= date_sub(now(), interval 3 month)
+					</if>
+					and p.hospital_id = #{hospitalId}
+					and p.id = #{patientId}
+				</where>
+			 order by r.created_at desc) as a
+	</select>
+
+	<select id="patientInfo" parameterType="Long" resultType="yezak.api.api.reception.dto.PatientInfoRes">
+		<!-- 인적정보 -->
+		select chart_number
+			 , name
+			 , phone_number
+			 , first_registration_number
+			 , second_registration_number
+			 , address
+			 , address_detail
+			 , agreed_personal
+			 , agreed_marketing
+			 , agreed_settlement
+		  from patients
+		 where id = #{patientId}
+	</select>
+	
+	<select id="receptionInfo" parameterType="Long" resultType="yezak.api.api.reception.dto.ReceptionInfoRes">
+		<!-- 접수정보 -->
+		select r.visit_purpose_id
+			 , vp.name as visitPurposeName
+			 , up.user_id as doctorId
+			 , u.name as doctorName
+			 , r.protector_name
+			 , r.protector_phone_number
+			 , r.protector_relation_id
+			 , pr.name as protectorRelationName
+		  from receptions as r
+	 left join visit_purposes as vp
+			on vp.id = r.visit_purpose_id
+	 left join patients as p
+			on p.id = r.patient_id
+	 left join user_patient as up
+			on up.patient_id = p.id
+	 left join users as u
+			on u.id = up.user_id
+	 left join protector_relations as pr
+			on pr.id = r.protector_relation_id
+	 	 where r.id = #{receptionId}
+		   and p.hospital_id = #{hospitalId}
+		   and r.room_id is null
+	</select>
+
+	<select id="reservationInfo" parameterType="Long" resultType="yezak.api.api.reception.dto.ReservationInfoRes">
+		<!-- 예약정보 -->
+		select rv.reservated_at
+			 , r.ko_name as roomName
+		  from reservations as rv
+	 left join rooms as r
+			on rv.room_id = r.id
+		 where date(reservated_at) = curdate()
+		   and patient_id = #{patientId}
+	</select>
+
+	<update id="updatePatientInfo" parameterType="yezak.api.api.reception.dto.UpdatePatientInfoReq">
+		<!-- 인적정보 수정 -->
+		update patients
+		   set name = #{name}
+			 , first_registration_number = #{firstRegistrationNumber}
+			 , second_registration_number = #{secondRegistrationNumber}
+			 , address = #{address}
+			 , phone_number = #{phoneNumber}
+			 , address_detail = #{addressDetail}
+			 , agreed_personal = #{agreedPersonal}
+			 , agreed_marketing = #{agreedMarketing}
+			 , agreed_settlement = #{agreedSettlement}
+		 where id = #{patientId}
+	</update>
+
+	<update id="updateReceptionInfo" parameterType="yezak.api.api.reception.dto.UpdateReceptionInfoReq">
+		<!-- 접수정보 수정 -->
+		update receptions as r
+	 left join patients as p
+			on p.id = r.patient_id
+	 left join user_patient as up
+			on up.patient_id = p.id
+		   set r.visit_purpose_id = #{visitPurposeId}
+			 , up.user_id = #{doctorId}
+			 , r.protector_name = #{protectorName}
+			 , r.protector_phone_number = #{protectorPhoneNumber}
+			 , r.protector_relation_id = #{protectorRelationId}
+			 , r.room_id = #{roomId}
+			 , r.status_id = #{statusId}
+		 where r.id = #{receptionId}
+	</update>
+
+	<select id="selectProtectorRelation" resultType="Map">
+		<!-- 보호자 관계리스트 -->
+		select id as value
+			 , name as text
+		  from protector_relations
+	</select>
+
+	<select id="selectDoctorList" parameterType="Long" resultType="Map">
+		<!-- 의사 리스트 -->
+		select u.id as value
+			 , u.name as text
+		  from users as u
+	 left join roles as r
+			on r.id = u.role_id
+	 left join role_categories as rc
+			on rc.id = r.role_category_id
+		 where u.hospital_id = #{hospitalId}
+		   and (rc.id = 1
+			or rc.id = 12)
+	</select>
+	
+	<insert id="createPatientLog" parameterType="yezak.api.api.reception.dto.CreatePatientLogReq">
+		<!-- 회원정보 수정 이력 생성 -->
+		insert into patient_logs
+		(
+			user_id
+		  , patient_id
+		  , patient_change_category_id
+		  , before_content
+		)
+		values
+		(
+			#{userId}
+		  , #{patientId}
+		  , #{patientChangeCategoryId}
+		  , #{beforeContent}
+		)
+	</insert>
+
+	<select id="patientLogList" parameterType="Long" resultType="yezak.api.api.reception.dto.PatientLogListRes">
+		<!-- 회원정보 수정 이력 -->
+		select u.email
+			 , pl.created_at
+			 , pcc.content
+			 , pl.before_content
+		  from patient_logs as pl
+	 left join patient_change_categories as pcc
+			on pcc.id = pl.patient_change_category_id
+	 left join users as u
+			on u.id = pl.user_id
+		 where pl.patient_id = #{patientId}
+	</select>
+
+	<insert id="insertPatientMemo" parameterType="yezak.api.api.reception.dto.InsertPatientMemoReq">
+		<!-- 고객 메모 작성 -->
+		insert into patient_memos
+		(
+			user_id
+		  , patient_id
+		  , content
+		)
+		values
+		(
+			#{userId}
+		  , #{patientId}
+		  , #{content}
+		)
+	</insert>
+
+	<delete id="deletePatientMemo" parameterType="Long">
+		<!-- 고객 메모 삭제 -->
+		delete from patient_memos
+		 where id = #{memoId}
+		   and user_id = #{userId}
+	</delete>
+
+	<update id="updatePatientMemo" parameterType="yezak.api.api.reception.dto.UpdatePatientMemoReq">
+		<!-- 고객 메모 수정 -->
+		update patient_memos
+		   set content = #{content}
+		 where id = #{memoId}
+		   and user_id = #{userId}
+	</update>
+
+	<select id="patientMemoList" parameterType="Long" resultType="yezak.api.api.reception.dto.PatientMemoListRes">
+		<!-- 고객 메모 리스트 -->
+		select pm.id as memoId
+			 , p.name
+			 , CONCAT(if(DATE_FORMAT(pm.created_at, '%p') = 'AM', '오전', '오후'), ' ', DATE_FORMAT(pm.created_at, '%h:%i')) as created_at
+			 , pm.content
+		  from patient_memos as pm
+	 left join patients as p
+			on p.id = pm.patient_id
+		 where pm.user_id = #{userId}
+		   and pm.patient_id = #{patientId}
+	</select>
+
+<!--	<select id="awaitingStorageList" parameterType="" resultType="">-->
+<!--		&lt;!&ndash; 수납 대기 리스트 &ndash;&gt;-->
+<!--		select p.chart_number-->
+<!--			 , p.name-->
+<!--			 , concat(p.first_registration_number,'-',p.second_registration_number) as registrationNumber,-->
+<!--			 , YEAR(CURDATE()) - (case p.second_registration_number-->
+<!--									when '0' then concat('18',left(p.first_registration_number,2))-->
+<!--									when '9' then concat('18',left(p.first_registration_number,2))-->
+<!--									when '3' then concat('20',left(p.first_registration_number,2))-->
+<!--									when '4' then concat('20',left(p.first_registration_number,2))-->
+<!--									else concat('19',left(p.first_registration_number,2))-->
+<!--								   end) AS age-->
+<!--			 , -->
+<!--			 , p.insurance_type_id-->
+<!--			 , (select name from users where id = up.user_id) as doctorName-->
+<!--		  from patients as p-->
+<!--	 left join user_patient as up-->
+<!--			on up.patient_id = p.id-->
+
+<!--	</select>-->
+
+
+</mapper>

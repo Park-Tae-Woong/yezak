@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="yezak.api.api.admin.room.RoomMapper">
+
+    <select id="StorageRoom" parameterType="Long" resultType="yezak.api.api.admin.room.dto.RoomDto">
+        <!-- 수납실 -->
+        select row_number() over (order by r.id) as no
+             , r.id
+             , sc.ko_name as scKoName
+             , r.schedule_category_id as scheduleCategoryId
+             , r.ko_name as rKoName
+             , r.expose_yn
+             , r.minutes_per_person as minutesPerPerson
+             , r.max_reservation as maxReservation
+          from rooms as r
+     left join schedule_categories as sc
+            on sc.id = r.schedule_category_id
+         where r.hospital_id = #{hospitalId}
+           and r.schedule_category_id = 5
+    </select>
+    
+    <select id="roomList" parameterType="Long" resultType="yezak.api.api.admin.room.dto.RoomDto">
+        <!-- 수납실 제외 대기실 리스트 -->
+        select row_number() over (order by r.id) as no
+             , r.id
+             , sc.ko_name as scKoName
+             , r.schedule_category_id as scheduleCategoryId
+             , r.ko_name as rKoName
+             , r.expose_yn
+             , r.minutes_per_person as minutesPerPerson
+             , r.max_reservation as maxReservation
+          from rooms as r
+     left join schedule_categories as sc
+            on sc.id = r.schedule_category_id
+         where r.hospital_id = #{hospitalId}
+           and r.schedule_category_id &lt;&gt; 5
+    </select>
+
+    <delete id="deleteRooms" parameterType="yezak.api.api.admin.room.dto.DeleteRoomReq">
+        <!-- 대기실 삭제 -->
+        delete from rooms
+         where id = #{id}
+    </delete>
+
+    <insert id="createRooms" parameterType="yezak.api.api.admin.room.dto.CreateRoomReq">
+        <!-- 대기실 생성 -->
+        insert into rooms
+        (
+            hospital_id
+          , ko_name
+          , schedule_category_id
+          , expose_yn
+          , max_reservation
+          , minutes_per_person
+        )
+        values
+        (
+            #{hospitalId}
+          , #{rKoName}
+          , #{scheduleCategoryId}
+          , #{exposeYn}
+          , #{maxReservation}
+          , #{minutesPerPerson}
+        )
+    </insert>
+
+    <update id="updateRooms" parameterType="yezak.api.api.admin.room.dto.UpdateRoomReq">
+        <!-- 대기실 수정 -->
+        update rooms as r
+           set schedule_category_id = #{scheduleCategoryId}
+             , ko_name = #{rKoName}
+             , expose_yn = #{exposeYn}
+             , minutes_per_person = #{minutesPerPerson}
+             , max_reservation = #{maxReservation}
+         where id = #{id}
+           and hospital_id = #{hospitalId}
+    </update>
+
+    <select id="getScheduleCategoriesList" resultType="yezak.api.api.admin.room.dto.ScheduleCategoriesInfo">
+        SELECT
+            id AS id,
+            ko_name AS koName
+        FROM schedule_categories
+    </select>
+
+</mapper>
